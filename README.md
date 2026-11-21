@@ -10,6 +10,10 @@ Independently verified, receipt-backed security research against the current PHP
 
 ## Vulnerability Inventory
 
+**Complete inventory: [VULNS.md](VULNS.md) — every finding (47) with its associated PoC (`pocs/f1/` … `pocs/f52/`), severity, class, component, and status against the 2026-11-19 tips.**
+
+Headline findings (full writeups, harnesses, receipts):
+
 | # | Finding | CVSS | Attack Vector | Status | Folder |
 |:-:|---------|:----:|--------------|:------:|--------|
 | 1 | Cross-pool opcache function-dispatch confusion | **8.5** | Multi-tenant FPM: attacker pool compiles, victim pool executes, `disable_functions` differs | 🔴 Live RCE on **8.4.28 / 8.5.13 / 8.6.0** + Debian pkg — 12/12 marker-proven; realistic cPanel-style list → arbitrary file read | `crosspool/` |
