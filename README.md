@@ -150,6 +150,13 @@ docker run -it debian:trixie bash -c 'apt-get update && apt-get install -y php-f
 
 All escalated findings verified on default configuration unless stated: default Zend MM, FFI disabled, no `USE_ZEND_ALLOC` override, no ASan, opcache on (package default for FPM).
 
+## Credits
+
+| Contribution | Credited to |
+|-------------|-------------|
+| All findings, verification, harnesses, receipts | [@acd421](https://x.com/acd421) |
+| RCE research assistance — E3 user-filter UAF → `write_property` hijack → `system()` | [@GGSec](https://x.com/GGASecDe) |
+
 ## Disclaimer
 
 This material is security research for **defensive** and **authorized** testing only. It is not permission or encouragement to attack systems you do not own or are not explicitly authorized to test.
