@@ -1,0 +1,48 @@
+=== 8.4 (real 8.4.28) exec-family first-call matrix Fri Nov 20 18:41:14 CST 2026 ===
+--- [exec] B warm:
+
+RET=''
+MK=GT3_EXEC
+--- [exec] A fire (marker cleared):
+
+string(0) "" interned
+bool(true)
+RET=
+MK=1
+--- [exec] verdict: no marker (blocked/crashed)
+--- [shell] B warm:
+
+RET=NULL
+MK=GT3_SHELL
+--- [shell] A fire (marker cleared):
+
+<br />
+<b>Fatal error</b>:  Uncaught TypeError: proc_nice(): Argument #1 ($priority) must be of type int, string given in /www/gt_shell.php:2
+Stack trace:
+#0 /www/gt_shell.php(2): proc_nice('echo GT3_SHELL ...')
+#1 {main}
+  thrown in <b>/www/gt_shell.php</b> on line <b>2</b><br />
+--- [shell] verdict: no marker (blocked/crashed)
+--- [system] B warm:
+
+RET=''
+MK=GT3_SYSTEM
+--- [system] A fire (marker cleared):
+
+NULL
+bool(true)
+RET=
+MK=1
+--- [system] verdict: no marker (blocked/crashed)
+--- [passthru] B warm:
+
+RET=NULL
+MK=GT3_PASSTHRU
+--- [passthru] A fire (marker cleared):
+
+string(41) "echo GT3_PASSTHRU \> /www/mk_passthru.log" refcount(2)
+bool(true)
+RET=
+MK=ABSENT
+--- [passthru] verdict: no marker (blocked/crashed)
+--- crash log:

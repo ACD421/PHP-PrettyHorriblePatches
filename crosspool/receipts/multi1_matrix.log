@@ -1,0 +1,12 @@
+docker 8.4 r1: *** RCE — marker written by disabled pool A ***
+docker 8.5 r1: *** RCE — marker written by disabled pool A ***
+docker 8.6 r1: *** RCE — marker written by disabled pool A ***
+docker 8.4 r2: *** RCE — marker written by disabled pool A ***
+docker 8.5 r2: *** RCE — marker written by disabled pool A ***
+docker 8.6 r2: *** RCE — marker written by disabled pool A ***
+docker 8.4 r3: *** RCE — marker written by disabled pool A ***
+docker 8.5 r3: *** RCE — marker written by disabled pool A ***
+docker 8.6 r3: *** RCE — marker written by disabled pool A ***
+debian-pkg(8.4.28) r1: *** RCE — marker written by disabled pool A ***
+debian-pkg(8.4.28) r2: *** RCE — marker written by disabled pool A ***
+debian-pkg(8.4.28) r3: *** RCE — marker written by disabled pool A ***
