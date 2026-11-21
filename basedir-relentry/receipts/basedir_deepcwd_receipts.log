@@ -1,0 +1,19 @@
+=== open_basedir deep-cwd escape receipts Fri Nov 20 20:39:25 CST 2026 ===
+--- 8.4 CLI: inherited deep cwd (>PATH_MAX) + raw relative entry via -d:
+PHP=8.4.28
+GETCWD_AT_START=false
+INI_SET='/tmp/f49/jail:../' RAW='/tmp/f49/jail:../'
+OUTSIDE=false
+PASSWD='root:x:0:0:root:/root:/bin/bash
+END
+--- 8.5 CLI: inherited deep cwd (>PATH_MAX) + raw relative entry via -d:
+PHP=8.5.13
+GETCWD_AT_START=false
+INI_SET='/tmp/f49/jail:../' RAW='/tmp/f49/jail:../'
+OUTSIDE=false
+PASSWD='root:x:0:0:root:/root:/bin/bash
+END
+--- 8.6 CLI: inherited deep cwd (>PATH_MAX) + raw relative entry via -d:
+PHP=8.6.0
+GETCWD_AT_START='/'
+GETCWD_WORKS len=1

@@ -15,8 +15,10 @@ anywhere in the PoC. Pure PHP end to end.
 - `disable_functions` is the hardening being defeated: the PoC runs with the full
   cPanel-style list above and still reaches libc `system()`.
 - `/proc/self/maps` + `/proc/self/mem` accessible (stock Linux, same-UID, no
-  privileges). Note: `open_basedir` blocks these paths, so the PoC as shipped
-  defeats `disable_functions` but not `open_basedir`.
+  privileges). `open_basedir` blocks these paths, so the PoC as shipped defeats
+  `disable_functions` but not `open_basedir`. The full write-up of every attempted
+  `open_basedir`-combined route (all tested, all closed on these builds) is at the
+  end of this document.
 
 ## Mechanism (gdb-verified chain on 8.4.28; hop-level disassembly on 8.6.0; behavior-verified on all three tips)
 
@@ -78,3 +80,32 @@ docker run --rm -v $PWD:/h -e F7_TARGET=abort \
   includes the inlined pure-PHP ELF resolver
 - `receipts/f7v8_hardened.log` - 6/6 under the full disable_functions list
   (marker x3 + exit-134 x3, true exit codes)
+
+## Attempted open_basedir-combined routes (all tested, all closed)
+
+Every route below was tested on 2026-11-20 against the release tips; these are
+negative results, recorded so the attack surface is fully mapped:
+
+1. **Symlinks inside the jail to outside targets** (`ln -s /etc/passwd`, `/proc/self/mem`,
+   `/proc/self/maps`): the basedir check resolves symlinks (expand goes through
+   realpath); reads of the in-jail symlink paths are denied on all three tips.
+2. **Hash-field pointer forging** (make a reclaim string's lazily-computed hash equal
+   a heap address): `zend_inline_hash_func` returns `hash | 0x8000000000000000`
+   (`Zend/zend_string.h:635`), so the stored hash is never a canonical userspace
+   pointer; any deref faults.
+3. **Natural bin-96 allocations with a controlled pointer at +8**: the freed
+   user-filter object lands in bin 96; packed-array arData needs capacity 5 (88 bytes)
+   but capacities round to powers of two (8 -> bin 160), bucket arrays skip the bin,
+   strings put the (poisoned) hash at +8, objects put the handle there.
+4. **Runtime `ini_set` relative entries**: rejected when `getcwd()` fails; expanded
+   at set time when it works (see `basedir-relentry/` for the full map).
+5. **FPM/CGI deep-cwd states**: both SAPIs canonicalize the primary script path
+   through 4096-byte buffers (`File not found` / `No input file specified`), even
+   via chains of short relative symlinks that the shell resolves fine.
+6. **PHP-side deep `chdir`**: blocked at the 4096 expansion check in the basedir
+   check; the deepest reachable cwd still has a working `getcwd()`.
+
+The one open_basedir-combined state that does reach full escape (inherited cwd
+deeper than PATH_MAX plus a raw relative entry, receipted for 8.4.28/8.5.13 in
+`basedir-relentry/receipts/basedir_deepcwd_receipts.log`) still requires the
+relative entry to come from the imposed configuration.

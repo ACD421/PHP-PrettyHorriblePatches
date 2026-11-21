@@ -1,59 +1,85 @@
-# Configuration footgun: open_basedir relative entries (not an escalated finding)
+# open_basedir relative entries: full-escape state and complete attack-surface map
 
-**Status:** Live on 8.4.28 / 8.5.13 / 8.6.0 (CLI `-d` shape and real FPM pool),
-but the live vector requires an operator to have written a relative entry
-(for example `../`) into `open_basedir`. PHP documents basedir entries as absolute
-paths; a relative entry is operator error that the engine tolerates. We therefore
-document this as a hardening footgun, not as an escalated vulnerability, and no
-CVSS is claimed for it.
+**Status:** The relative entry itself must come from the imposed configuration
+(`-d`, ini file, pool config, or `.user.ini`), so this is documented as a hardening
+footgun rather than an escalated finding. What is new here, and receipted: when a
+relative entry is active and the process cwd exceeds PATH_MAX, the engine enters a
+**full-escape state** (not a one-level widen), and every attacker-only route to reach
+that state was tested and is closed on these builds.
 
-## Behavior
+## The full-escape state (receipted, 8.4.28 + 8.5.13)
 
-- `open_basedir` entries are expanded once, at startup, against the process cwd at
-  that moment. php-fpm masters launch from `/`, so a pool entry like `/www:../`
-  expands to the filesystem root at startup, and the pool effectively has no basedir:
-  absolute reads of `/etc/passwd` succeed directly through the response.
-- From a jailed CLI process the same reachability appears with
-  `-d open_basedir=jail:../`: the entry expands at parse, and climbing `chdir('..')`
-  walks to `/` with every subsequent absolute read permitted.
+With a relative entry in the active basedir and `getcwd()` failing (cwd deeper than
+PATH_MAX, inherited from the shell; PHP-side `chdir` cannot reach such depth because
+the basedir check expands targets through a 4096 buffer):
 
-## What does NOT work (tested, all three tips)
+- the startup parse cannot expand the relative entry, so it is stored **raw**
+- at check time, relative traversal paths also stay unexpanded (`getcwd()` fails)
+- the raw path prefix-matches the raw entry
+- the kernel still resolves the relative path component-wise from the valid deep cwd
 
-- Runtime `ini_set('open_basedir', $jail . ':../')` from a jailed process: the
-  subset check passes (expansion is cwd-relative at set time) and the literal
-  `../` is stored, but the runtime-stored literal does not grant escape; the
-  climb stalls at the jail boundary.
-- `getcwd()`-failure shapes (rmdir own cwd): all read/write/include escapes blocked.
-- Plain deletion of the jail directory: Linux `getcwd()` follows renames; no
-  failure window.
+Result: `file_get_contents('../../...etc/passwd')` reads **`/etc/passwd` from outside
+the jail**. Receipt: `receipts/basedir_deepcwd_receipts.log` (8.4.28, 8.5.13;
+8.6.0 normalizes the inherited deep cwd to `/` and resists).
+
+Threat model: a sandboxed CLI runner that imposes `open_basedir` containing a
+relative entry and executes attacker-influenced code with an attacker-controlled
+working directory (the attacker makes the tree deeper than PATH_MAX before the
+runner starts). The relative entry still has to be in the imposed config, which is
+why this is not escalated.
+
+## Startup-expansion behavior (the ordinary footgun)
+
+- `open_basedir` entries are expanded once at startup against the daemon's cwd.
+  php-fpm masters launch from `/`, so a pool entry like `/www:../` expands to the
+  filesystem root and the pool effectively has no basedir.
+- From a jailed CLI process, `-d open_basedir=jail:../` with a shallow cwd expands
+  `../` to the cwd parent (one level of widen), and the classic climb-to-root chain
+  follows when the entry expands high enough.
+
+## Per-dir ini nuance (`.user.ini`)
+
+`.user.ini` parsing (CGI/FPM) stores `open_basedir` entries **without** expansion,
+unlike the startup parse. A tenant-writable `.user.ini` can therefore put a raw
+relative entry into the active basedir. Combined with the deep-cwd state this would
+be a fully attacker-owned escape, but both SAPIs canonicalize the primary script
+path through 4096 buffers, so a request can never reach a deep cwd:
+- FPM: `File not found` for a script whose canonical path exceeds PATH_MAX, even
+  via a chain of short relative symlinks that the shell resolves fine
+- CGI (Debian php-cgi 8.4.28): `No input file specified` (same wall)
+
+## What does NOT work (all tested, receipted or reproduced on all three tips)
+
+- Runtime `ini_set('open_basedir', $jail . ':../')` with working getcwd: the subset
+  check passes and the literal is stored, but enforcement expands it at set time;
+  the climb stalls at the jail boundary.
+- The same `ini_set` with failing getcwd (deep cwd): rejected outright.
+- `getcwd()`-failure by deleting the cwd (rmdir): all escapes blocked, and file
+  operations fail at the kernel anyway (deleted inode).
+- PHP-side deep `chdir`: blocked at the 4096 expansion check in the basedir check.
+- FPM/CGI requests into deep trees: canonical-path wall above.
 
 ## Hardening recommendations
 
 - Reject or canonicalize relative `open_basedir` entries at ini parse time
-  (engine-side fix).
-- Operators: never write relative entries; audit pool configs for them
-  (`grep -r 'open_basedir.*\.\./' /etc/php*`).
+  (covers startup, per-dir, and pool config).
+- Make the basedir check fail closed on expansion failure at check time as well.
+- Operators: never write relative entries; audit pool configs and `.user.ini`
+  files (`grep -rE 'open_basedir.*\.\.' /etc/php*` and docroots).
 
-## Reproduce
-
-```
-mkdir -p /tmp/f49/jail/deep/down/here
-echo MARKER > /tmp/f49/OUTSIDE.txt
-php -n -d open_basedir=/tmp/f49/jail:../ poc/poc-f49d.php
-# CWD0=/tmp/f49/jail/deep/down/here -> 20x chdir('..') -> CWD='/'
-# OUTSIDE='MARKER'  PASSWD='root:x:0:0:root...'  include executed
-```
-
-FPM pool shape (receipt in `crosspool/receipts/e1_default_whm.log` context):
+## Reproduce (full-escape state)
 
 ```
-docker run -d --name bd -p 9001:9001 -v $PWD:/www php:8.4-fpm \
-  php-fpm -F -y poc/fpm-bd.conf        # pool: php_admin_value[open_basedir] = /www:../
-python3 ../crosspool/poc/fcgi_client.py 127.0.0.1 9001 /www/bdprobe.php
-# PASSWD='root:x:0:0:root...'  HOSTNAME read - directly through the pool response
+mkdir -p /tmp/f49/jail && cd /tmp/f49/jail
+C=$(printf 'a%.0s' $(seq 1 249))
+for i in $(seq 1 18); do mkdir "$C"; cd "$C"; done     # cwd now > PATH_MAX
+php -d open_basedir=/tmp/f49/jail:../ /path/to/poc-f49win3.php
+# GETCWD_AT_START=false ... PASSWD='root:x:0:0:root:/root:/bin/bash...'  <- outside the jail
 ```
 
 ## Files
 
-- `poc/poc-f49d.php` - CLI receipt shape (climb + outside read + passwd + include)
-- `poc/fpm-bd.conf`, `poc/bdprobe.php` - real-pool demo
+- `poc/poc-f49d.php` - CLI startup-expansion climb receipt shape
+- `poc/poc-f49win3.php` - full-escape-state probe (deep cwd + raw entry)
+- `poc/fpm-bd.conf`, `poc/bdprobe.php` - real-pool footgun demo
+- `receipts/basedir_deepcwd_receipts.log` - full-escape receipts + 8.6 negative
