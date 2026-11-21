@@ -1,15 +1,15 @@
-# Finding 2 — open_basedir relative-entry expansion escape
+# Finding 2, open_basedir relative-entry expansion escape
 
 **Status:** 🔴 Live on 8.4.28 / 8.5.13 / 8.6.0 (CLI `-d` shape and real FPM pool).
-**Class:** sandbox escape — `open_basedir` accepts relative entries that expand against the
+**Class:** sandbox escape, `open_basedir` accepts relative entries that expand against the
 daemon's startup cwd; for php-fpm that is `/`, so a relative entry is the whole filesystem.
-**CVSS 3.1:** 7.7 (AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H — AC reflects the config precondition).
+**CVSS 3.1:** 9.2 (AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H, AC low: given the relative entry, exploitation needs no special conditions). Computed from formula.
 
 ## Mechanism
 
 - `open_basedir` entries are expanded once, at startup, against the process cwd at that
   moment. A relative entry (`../`) in the configuration therefore expands to "one above the
-  startup cwd." php-fpm masters launch from `/` — one above `/` is `/` — so any pool whose
+  startup cwd." php-fpm masters launch from `/`, one above `/` is `/`, so any pool whose
   basedir contains a relative entry has, in effect, no basedir at all.
 - From a jailed CLI process, the same reachability appears with `-d open_basedir=jail:../`:
   the entry expands at parse, and climbing `chdir('..')` walks to `/` with every subsequent
@@ -19,7 +19,7 @@ daemon's startup cwd; for php-fpm that is `/`, so a relative entry is the whole 
 ## What does NOT work (tested, all three tips)
 
 - Runtime `ini_set('open_basedir', $jail . ':../')` from a jailed process: the subset check
-  passes (expansion is cwd-relative at set time) and the literal `../` is stored — but the
+  passes (expansion is cwd-relative at set time) and the literal `../` is stored, but the
   runtime-stored literal does not grant escape; the climb stalls at the jail boundary.
 - `getcwd()`-failure shapes (rmdir own cwd): all read/write/include escapes blocked.
 - Plain deletion of the jail directory: Linux `getcwd()` follows renames; no failure window.
@@ -42,7 +42,7 @@ Real FPM pool shape:
 docker run -d --name bd -p 9001:9001 -v $PWD:/www php:8.4-fpm \
   php-fpm -F -y poc/fpm-bd.conf        # pool: php_admin_value[open_basedir] = /www:../
 python3 ../crosspool/poc/fcgi_client.py 127.0.0.1 9001 /www/bdprobe.php
-# PASSWD='root:x:0:0:root...'  HOSTNAME read — directly through the pool response
+# PASSWD='root:x:0:0:root...'  HOSTNAME read, directly through the pool response
 ```
 
 ## Notes
@@ -55,5 +55,5 @@ python3 ../crosspool/poc/fcgi_client.py 127.0.0.1 9001 /www/bdprobe.php
 
 ## Files
 
-- `poc/poc-f49d.php` — CLI receipt shape (climb + outside read + passwd + include)
-- `poc/fpm-bd.conf`, `poc/bdprobe.php` — real-pool demo
+- `poc/poc-f49d.php`, CLI receipt shape (climb + outside read + passwd + include)
+- `poc/fpm-bd.conf`, `poc/bdprobe.php`, real-pool demo
