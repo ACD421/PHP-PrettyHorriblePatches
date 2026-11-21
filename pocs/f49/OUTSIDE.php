@@ -1,0 +1,1 @@
+<?php echo "BASEDIR-OUTSIDE-PHP-MARKER\n";
