@@ -12,9 +12,9 @@ Independently verified, receipt-backed security research against the current PHP
 
 | # | Finding | CVSS | Vector | Result | Folder |
 |:-:|---------|:----:|--------|--------|--------|
+| E3 | user-filter UAF -> `write_property` hijack -> `system()` | **9.2** | `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H` | **18/18 markers on all three tips under full cPanel-style `disable_functions`**. 8.4/8.5: dual-channel (f1 leak handler fires the exploit). 8.6.0*: direct-fire (f1 confusion fixed there). Gadget-popen, pure-PHP ELF libc resolution, bucket-data reclaim. **(active development: final form in progress, current form proven on 8.4.28, 8.5.13, 8.6.0)** | `userfilter-uaf/` |
 | E1 | Cross-pool opcache function-dispatch confusion | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | `disable_functions` bypass with OS command execution at default ini, 12/12 across all tips + Debian pkg; cPanel-style list gives arbitrary file read on all tips; invoked path gdb-identified (`php_exec` family -> libc `popen`) | `crosspool/` |
 | E2 | `open_basedir` relative-entry expansion escape | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | Full filesystem access on all three tips when a relative entry exists in the active basedir. Full-escape state (inherited cwd > PATH_MAX + raw entry) reads `/etc/passwd` outside the jail on 8.4.28 and 8.5.13; 8.6.0 normalizes deep cwd and resists | `basedir-relentry/` |
-| E3 | user-filter UAF -> `write_property` hijack -> `system()` | **9.2** | `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H` | **18/18 markers on all three tips under full cPanel-style `disable_functions`**. 8.4/8.5: dual-channel (f1 leak handler fires the exploit). 8.6.0*: direct-fire (f1 confusion fixed there). Gadget-popen, pure-PHP ELF libc resolution, bucket-data reclaim. **(active development: final form in progress, current form proven on 8.4.28, 8.5.13, 8.6.0)** | `userfilter-uaf/` |
 
 **CVSS 3.1 computed from formula.**
 
@@ -31,15 +31,15 @@ The E3 exploit is in active development toward its final form. The current imple
 
 ## Complete Vulnerability Inventory, all 47 findings, each with its PoC
 
-Findings are numbered sequentially by severity (1-47). E1 = #1, E2 = #2, E3 = #5. Corpus cross-reference: E1 was corpus #37, E2 was #49, E3 was #7.
+Findings are numbered sequentially by severity (1-47, most severe first). E3 = #1 (9.2), E1 = #2 (7.9), E2 = #3 (7.9). Corpus cross-reference: E3 was corpus #7, E1 was #37, E2 was #49.
 
 | # | Finding | Sev | Component | Status on 11-19 tips | PoC |
 |:-:|---------|:---:|-----------|----------------------|:---:|
-| 1 | FPM pools that share opcache run internal calls against the wrong disable_functions table | **-> E1** | FPM/OPcache | STILL PRESENT, fresh-verified 11-20 | crosspool/ |
-| 2 | open_basedir escape: getcwd failure stores literal ../ | **-> E2** | main/fopen_wrappers.c open_basedir | STILL PRESENT, fresh-verified 11-20 | basedir-relentry/ |
-| 3 | Failed unserialize leaves Exception::$trace as an object; getTraceAsString walks it as a HashTable | **high** | unserialize | STILL PRESENT, fresh-verified 11-20 | highs/ |
-| 4 | quoted-printable encode reads past the chunk when line-break-chars starts with SP or TAB | **high** | ext/standard convert.quoted-printable-en | STILL PRESENT, fresh-verified 11-20 | highs/ |
-| 5 | stream_filter_remove from inside filter() frees the active user filter and use-after-frees it | **-> E3** | ext/standard user filters | STILL PRESENT, fresh-verified 11-20 | userfilter-uaf/ |
+| 1 | stream_filter_remove from inside filter() frees the active user filter and use-after-frees it | **-> E3** | ext/standard user filters | STILL PRESENT, fresh-verified 11-20 | userfilter-uaf/ |
+| 2 | FPM pools that share opcache run internal calls against the wrong disable_functions table | **-> E1** | FPM/OPcache | STILL PRESENT, fresh-verified 11-20 | crosspool/ |
+| 3 | open_basedir escape: getcwd failure stores literal ../ | **-> E2** | main/fopen_wrappers.c open_basedir | STILL PRESENT, fresh-verified 11-20 | basedir-relentry/ |
+| 4 | Failed unserialize leaves Exception::$trace as an object; getTraceAsString walks it as a HashTable | **high** | unserialize | STILL PRESENT, fresh-verified 11-20 | highs/ |
+| 5 | quoted-printable encode reads past the chunk when line-break-chars starts with SP or TAB | **high** | ext/standard convert.quoted-printable-en | STILL PRESENT, fresh-verified 11-20 | highs/ |
 | 6 | DOMXPath namespace-axis callback UAF of a foreign document element | **high** | ext/dom | STILL PRESENT (source-verified vs 8.5.13/8.4.28) | pocs/f6/ |
 | 7 | Tracing JIT double-frees ASSIGN_DIM OP_DATA after null-offset deprecation | **high** | opcache tracing JIT | FIXED 11-19 release | pocs/f7/ |
 | 8 | ArrayObject::__unserialize accepts a non-ArrayIterator and getIterator type-confuses destruction | **high** | ext/spl ArrayObject | STILL PRESENT (source-verified vs 8.5.13/8.4.28) | pocs/f8/ |
@@ -91,11 +91,11 @@ Findings are numbered sequentially by severity (1-47). E1 = #1, E2 = #2, E3 = #5
 
 ### Fresh-verification notes
 
-- **#1 / E1**: cross-pool function-dispatch confusion. Default ini. gdb-identified invocation.
-- **#2 / E2**: relative-entry escape. Full-escape on 8.4.28 + 8.5.13 (deep cwd + raw entry). 8.6.0 resists.
-- **#5 / E3**: user-filter UAF -> `system()` on all tips, 18/18 under full disable_functions. Dual-channel on 8.4/8.5; direct-fire on 8.6.0.
-- **#3**: SIGSEGV 139 on 8.4.28 + 8.5.13; clean on 8.6.0.
-- **#4**: live on 8.4.28 + 8.5.13; 8.6.0 keeps the SP.
+- **#2 / E1**: cross-pool function-dispatch confusion. Default ini. gdb-identified invocation.
+- **#3 / E2**: relative-entry escape. Full-escape on 8.4.28 + 8.5.13 (deep cwd + raw entry). 8.6.0 resists.
+- **#1 / E3**: user-filter UAF -> `system()` on all tips, 18/18 under full disable_functions. Dual-channel on 8.4/8.5; direct-fire on 8.6.0.
+- **#4**: SIGSEGV 139 on 8.4.28 + 8.5.13; clean on 8.6.0.
+- **#5**: live on 8.4.28 + 8.5.13; 8.6.0 keeps the SP.
 - **#12**: inert on release builds.
 
 ---
