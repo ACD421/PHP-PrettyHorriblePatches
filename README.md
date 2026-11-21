@@ -1,6 +1,6 @@
 # PHP-PrettyHorriblePatches
 
-Independently verified, receipt-backed security research against the current PHP tips: three escalated exploit classes and a full 47-finding corpus re-validation on **8.4.28 / 8.5.13 / 8.6.0** (2026-11-19 security release). Every escalated claim was rebuilt and re-run from scratch on 2026-11-20 — fresh containers, marker discipline, fresh-compile controls. Where prior third-party claims disagreed with reproduction, the disagreement is documented.
+Independently verified, receipt-backed security research against the current PHP tips: three escalated exploit classes and a full 47-finding corpus re-validation on **8.4.28 / 8.5.13 / 8.6.0** (2026-11-19 security release). Every escalated claim was rebuilt and re-run from scratch on 2026-11-20 — fresh containers, marker discipline (markers deleted between phases), fresh-compile controls.
 
 **Authors:** [@acd421](https://x.com/acd421)
 **Date:** 2026-11-20 (America/Chicago)
@@ -80,14 +80,14 @@ Corpus: confirmed-findings research engagement (original proofs vs 8.5.12/8.4.27
 - **source-verified** — code path compared against the `php-8.5.13` / `php-8.4.28` tags; unchanged = still present. Corpus PoC included as shipped.
 - **Fixed** — closed by the 2026-11-19 release (now-published advisories: #3 = GHSA-658j-r8rw-q6mx/CVE-2026-115560, #17 = GH-24437, #27 = CVE-2026-129538, #28 = CVE-2026-129292).
 
-### Fresh-verification deltas
+### Fresh-verification notes
 
-- **#37** — recharacterized: not a clean bypass but cross-pool function-dispatch confusion (see E1). Deterministic per (build, config, script); composition of the disable list selects the invoked builtin; enumerable offline via `get_defined_functions()` table-order diff.
-- **#49** — live on every tip (see E2). A prior third-party "not reproduced" verdict was a test artifact (missing prebuilt tree, wrong relative depth, missing `-n`); faithful PoC shapes are receipted.
-- **#7** — escalated to full `system()` on all three tips, stock release builds (see E3).
+- **#37 / E1** — the underlying mechanism is cross-pool function-dispatch confusion: deterministic per (build, config, script), the disable-list composition selects the invoked builtin, and the map is enumerable offline via a `get_defined_functions()` table-order diff.
+- **#49 / E2** — live on every tip; verified with the full PoC harness shapes (prebuilt directory tree, exact launch flags, FPM pool configuration).
+- **#7 / E3** — escalated to full `system()` execution on all three tips, stock release builds.
 - **#1** — SIGSEGV exit 139 on 8.4.28 + 8.5.13; clean exit 0 on 8.6.0 (unmodified corpus PoC).
 - **#6** — live on 8.4.28 + 8.5.13 (16-byte in → 15-byte out, trailing SP deleted); 8.6.0 keeps the SP with this shape.
-- **#50** — corpus PoC inert on release builds of all three tips (source-level present; needs grooming).
+- **#50** — corpus PoC does not fire on release builds of the current tips (code path present at source level; exploitation requires additional heap grooming).
 
 ---
 
@@ -152,7 +152,13 @@ All escalated findings verified on default configuration unless stated: default 
 
 ## Disclaimer
 
-Security research for defensive and authorized testing only, published so operators and maintainers can assess and patch. Not permission to attack systems you do not own or are not authorized to test.
+This material is security research for **defensive** and **authorized** testing only. It is not permission or encouragement to attack systems you do not own or are not explicitly authorized to test.
+
+- **PHP (the project / PHP Group / related foundations):** Findings, root-cause notes, status tables, and reproduction material are published so operators and maintainers can assess and patch. Do not use this material to compromise production PHP deployments without authorization.
+- **CISA and similar government and standards bodies:** Treat this as coordinated, defensive research context intended to support vulnerability management and prioritization — not as a playbook for harmful activity against critical infrastructure or government systems.
+- **Cyber threat intelligence firms and defenders:** Status tables and root-cause summaries are provided to support detection, prioritization, and remediation. Redistribution or reuse of this material for malicious operations is prohibited.
+
+Unauthorized access to computer systems is illegal. The authors assume no liability for misuse.
 
 ## License
 
