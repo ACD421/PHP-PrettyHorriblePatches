@@ -1,4 +1,4 @@
-# Finding 3, user-filter UAF → write_property hijack → system()
+# Finding E3 (CVSS 7.5), user-filter UAF → write_property hijack → system()
 
 **Status:** 🔴 6/6 on stock release builds, `system()` marker on 8.4.28 / 8.5.13 / 8.6.0
 (3/3 each), `abort()` exit 134 (3/3). Default Zend MM, FFI disabled, no `USE_ZEND_ALLOC`

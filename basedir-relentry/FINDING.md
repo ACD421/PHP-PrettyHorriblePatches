@@ -1,4 +1,4 @@
-# Finding 2, open_basedir relative-entry expansion escape
+# Finding E1 (CVSS 9.2), open_basedir relative-entry expansion escape
 
 **Status:** 🔴 Live on 8.4.28 / 8.5.13 / 8.6.0 (CLI `-d` shape and real FPM pool).
 **Class:** sandbox escape, `open_basedir` accepts relative entries that expand against the

