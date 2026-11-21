@@ -1,0 +1,51 @@
+=== 8.4 system disable_functions=[exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source] Fri Nov 20 20:12:38 CST 2026 ===
+CANDS n=16995
+OBJ=0x7fc71be56168
+PATCHED
+RESUME
+PHP_EXIT=139
+/tmp/F7V8
+MARKER_PRESENT
+
+=== 8.4 abort disable_functions=[exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source] Fri Nov 20 20:12:39 CST 2026 ===
+CANDS n=16995
+OBJ=0x725309256168
+PATCHED
+RESUME
+PHP_EXIT=134
+NO_MARKER
+
+=== 8.5 system disable_functions=[exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source] Fri Nov 20 20:12:40 CST 2026 ===
+CANDS n=16239
+OBJ=0x7ccbc6456168
+PATCHED
+RESUME
+PHP_EXIT=139
+/tmp/F7V8
+MARKER_PRESENT
+
+=== 8.5 abort disable_functions=[exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source] Fri Nov 20 20:12:41 CST 2026 ===
+CANDS n=16239
+OBJ=0x7aa87b056168
+PATCHED
+RESUME
+PHP_EXIT=134
+NO_MARKER
+
+=== 8.6 system disable_functions=[exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source] Fri Nov 20 20:12:42 CST 2026 ===
+CANDS n=16289
+OBJ=0x79a787456168
+PATCHED
+RESUME
+PHP_EXIT=139
+/tmp/F7V8
+MARKER_PRESENT
+
+=== 8.6 abort disable_functions=[exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source] Fri Nov 20 20:12:43 CST 2026 ===
+CANDS n=16289
+OBJ=0x7e5d27e56168
+PATCHED
+RESUME
+PHP_EXIT=134
+NO_MARKER
+

