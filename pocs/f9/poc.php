@@ -1,108 +1,71 @@
 <?php
-/**
- * proc_open NUL truncation.
- * fopen()/Z_PARAM_PATH reject the same strings. proc_open cwd, the string
- * command, and descriptorspec file paths are handed to C APIs via ZSTR_VAL,
- * so the kernel sees only the prefix before the first NUL.
- */
-declare(strict_types=1);
+// 1) mhash_keygen_s2k truncates the length through (int) before generating the key.
+// 2) password_get_info() sscanf's Argon2 costs into zend_long and returns success
+//    with a saturated cost when the digit run does not fit.
+// 3) hash_copy() of an xxh3/xxh128 context created with a secret copies XXH3_state_t
+//    by value, including extSecret, which points into the source context's secret
+//    buffer. hash_final() on the source frees that buffer. The copy then reads it.
 
-$secret = '/tmp/proc-nul-secret';
-$decoy  = '/tmp/proc-nul-decoy.txt';
-$secdir = '/tmp/proc-nul-secretdir';
-$pub    = '/tmp/proc-nul-public';
-@mkdir($secdir, 0700, true);
-@mkdir($pub, 0700, true);
-file_put_contents($secret, "SECRET_FILE_CONTENTS\n");
-file_put_contents($decoy, "DECOY\n");
-file_put_contents($secdir . '/marker', "SECRET_DIR\n");
+echo "PHP_VERSION=" . PHP_VERSION . "\n";
 
-function show(string $label, string $value): void {
-    echo $label . ' len=' . strlen($value) . ' hex=' . bin2hex($value) . "\n";
-}
-
-echo "PHP " . PHP_VERSION . "\n";
-
-/* 1. Descriptor file path: suffix check passes, cat reads the secret. */
-$file = $secret . "\0.txt";
-show('file-arg', $file);
-echo 'ends_with_.txt=' . (str_ends_with($file, '.txt') ? 'yes' : 'no') . "\n";
-echo 'contains_NUL=' . (str_contains($file, "\0") ? 'yes' : 'no') . "\n";
-try {
-    $fh = fopen($file, 'r');
-    echo "fopen=OPENED\n";
-    if ($fh) fclose($fh);
-} catch (Throwable $e) {
-    echo 'fopen_rejected=' . $e->getMessage() . "\n";
-}
-
-$pipes = [];
-$proc = proc_open(
-    ['/bin/cat'],
-    [
-        0 => ['file', $file, 'r'],
-        1 => ['pipe', 'w'],
-        2 => ['pipe', 'w'],
-    ],
-    $pipes
-);
-if (!is_resource($proc)) {
-    echo "proc_open file failed\n";
+if (function_exists("mhash_keygen_s2k")) {
+    $want = (1 << 32) + 16;
+    $k = @mhash_keygen_s2k(MHASH_MD5, "password", "saltsalt", $want);
+    $got = is_string($k) ? strlen($k) : -1;
+    echo "mhash_keygen_s2k want=$want got=$got bad=" . (($got > 0 && $got !== $want) ? "YES" : "no") . "\n";
 } else {
-    $out = stream_get_contents($pipes[1]);
-    $err = stream_get_contents($pipes[2]);
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-    $rc = proc_close($proc);
-    echo "file_rc=$rc\n";
-    echo "file_stdout=" . json_encode($out) . "\n";
-    echo "file_stderr=" . json_encode($err) . "\n";
+    echo "mhash_keygen_s2k absent\n";
 }
 
-/* 2. cwd: suffix /public passes, child pwd is the directory before NUL. */
-$cwd = $secdir . "\0/public";
-show('cwd-arg', $cwd);
-echo 'ends_with_/public=' . (str_ends_with($cwd, '/public') ? 'yes' : 'no') . "\n";
-$pipes = [];
-$proc = proc_open(['/bin/pwd'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $cwd);
-if (!is_resource($proc)) {
-    echo "proc_open cwd failed\n";
+if (defined("PASSWORD_ARGON2ID")) {
+    $digits = str_repeat("9", 40);
+    $hash = '$argon2id$v=19$m=' . $digits . ',t=4,p=1$c29tZXNhbHRzb21lc2FsdA$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    $info = password_get_info($hash);
+    $cost = $info["options"]["memory_cost"] ?? null;
+    echo "argon_algo=" . $info["algoName"] . " memory_cost=" . var_export($cost, true)
+        . " saturated=" . ($cost === PHP_INT_MAX ? "YES" : "no") . "\n";
+    echo "argon_verify=" . var_export(password_verify("secret", $hash), true) . "\n";
+    $nr = password_needs_rehash($hash, PASSWORD_ARGON2ID, [
+        "memory_cost" => PHP_INT_MAX,
+        "time_cost" => 4,
+        "threads" => 1,
+    ]);
+    echo "argon_needs_rehash_matching_saturated=" . var_export($nr, true) . "\n";
 } else {
-    $out = stream_get_contents($pipes[1]);
-    $err = stream_get_contents($pipes[2]);
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-    $rc = proc_close($proc);
-    echo "cwd_rc=$rc\n";
-    echo "cwd_pwd=" . json_encode($out) . "\n";
-    echo "cwd_err=" . json_encode($err) . "\n";
+    echo "argon2 absent\n";
 }
 
-/* 3. String command accepts NUL; array form rejects it. Shell runs the prefix. */
-$cmd = "id\0echo SAFE_ONLY";
-show('cmd-arg', $cmd);
-echo 'ends_with_SAFE_ONLY=' . (str_ends_with($cmd, 'echo SAFE_ONLY') ? 'yes' : 'no') . "\n";
-echo 'has_metachar=' . (preg_match('/[;&|`$]/', $cmd) ? 'yes' : 'no') . "\n";
-try {
-    $pipes = [];
-    proc_open([$cmd], [1 => ['pipe', 'w']], $pipes);
-    echo "array_form=ACCEPTED\n";
-} catch (Throwable $e) {
-    echo 'array_form_rejected=' . $e->getMessage() . "\n";
-}
-$pipes = [];
-$proc = proc_open($cmd, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-if (!is_resource($proc)) {
-    echo "proc_open cmd failed\n";
-} else {
-    $out = stream_get_contents($pipes[1]);
-    $err = stream_get_contents($pipes[2]);
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-    $rc = proc_close($proc);
-    echo "cmd_rc=$rc\n";
-    echo "cmd_stdout=" . json_encode($out) . "\n";
-    echo "cmd_stderr=" . json_encode($err) . "\n";
+$secret = str_repeat("S", 136);
+$msg = str_repeat("M", 400);
+
+foreach (["xxh3", "xxh128"] as $algo) {
+    $fresh = hash_init($algo, options: ["secret" => $secret]);
+    hash_update($fresh, $msg);
+    $expect = hash_final($fresh);
+
+    // Use the copy immediately after the source context is freed.
+    // ASan poisons that block; extSecret still points into it.
+    $ctx = hash_init($algo, options: ["secret" => $secret]);
+    hash_update($ctx, $msg);
+    $copy = hash_copy($ctx);
+    hash_final($ctx);
+    unset($ctx);
+    $imm = hash_final($copy);
+    echo "$algo immediate_after_free expect=$expect got=$imm mismatch=" . ($imm !== $expect ? "YES" : "no") . "\n";
+
+    // Reuse the freed allocation, then digest again. The copy still reads extSecret.
+    $ctx = hash_init($algo, options: ["secret" => $secret]);
+    hash_update($ctx, $msg);
+    $copy = hash_copy($ctx);
+    hash_final($ctx);
+    unset($ctx);
+    $pad = [];
+    for ($n = 64; $n <= 8192; $n += 64) {
+        $pad[] = str_repeat("B", $n);
+    }
+    unset($pad);
+    $got = hash_final($copy);
+    echo "$algo after_reuse expect=$expect got=$got mismatch=" . ($got !== $expect ? "YES" : "no") . "\n";
 }
 
-echo "DONE\n";
+echo "done\n";

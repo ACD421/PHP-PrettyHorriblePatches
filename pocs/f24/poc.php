@@ -1,32 +1,20 @@
 <?php
-echo "PHP " . PHP_VERSION . "\n";
-
-$date = "2020-01-01 00:00:00.000000";
-$off = 'O:8:"DateTime":3:{s:4:"date";s:26:"' . $date . '";s:13:"timezone_type";i:1;s:8:"timezone";s:7:"+2 days";}';
-$ctl = 'O:8:"DateTime":3:{s:4:"date";s:26:"' . $date . '";s:13:"timezone_type";i:1;s:8:"timezone";s:6:"+00:00";}';
-
-$bad = unserialize($off);
-$ok = unserialize($ctl);
-echo "unserialize tz +2 days => " . $bad->format("Y-m-d H:i:s T") . " ts=" . $bad->getTimestamp() . "\n";
-echo "unserialize tz +00:00 => " . $ok->format("Y-m-d H:i:s T") . " ts=" . $ok->getTimestamp() . "\n";
-echo "delta_sec=" . ($bad->getTimestamp() - $ok->getTimestamp()) . "\n";
-
-$abbr = DateTime::__set_state([
-    "date" => $date,
-    "timezone_type" => 2,
-    "timezone" => "+1 day",
-]);
-echo "set_state abbr +1 day => " . $abbr->format("Y-m-d H:i:s T") . " ts=" . $abbr->getTimestamp() . "\n";
-
-$d = new DateTime("2000-01-01 00:00:00 UTC");
-$d->setDate(PHP_INT_MAX, 1, 1);
-echo "maxyear Y=" . $d->format("Y") . " U=" . $d->format("U") . "\n";
-
-$g = getdate(PHP_INT_MIN);
-echo "getdate INT_MIN mon=" . $g["mon"] . " month=" . $g["month"] . " year=" . $g["year"] . "\n";
-echo "date F INT_MIN=" . date("F", PHP_INT_MIN) . "\n";
-
-$c = date_create("2020-01-01 00:00:00 +999999");
-echo "off999999 " . ($c ? $c->format("c") . " getOffset=" . $c->getOffset() : "false") . "\n";
-
+// Smallest IDN input that confuses a default host check.
+// U+FF20 FULLWIDTH COMMERCIAL AT is not ASCII "@".
+// idn_to_ascii() maps it to "@" and returns success (errors=0).
+$in = "\u{FF20}a";
+$info = [];
+$r = idn_to_ascii($in, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46, $info);
+echo "version=" . PHP_VERSION . "\n";
+echo "in=" . bin2hex($in) . "\n";
+echo "ret=" . (is_string($r) ? bin2hex($r) : var_export($r, true)) . "\n";
+echo "errors=" . ($info['errors'] ?? 'x') . "\n";
+if (is_string($r)) {
+    $p = parse_url('http://' . $r . '/x');
+    echo "host=" . var_export($p['host'] ?? null, true) . "\n";
+    echo "user=" . var_export($p['user'] ?? null, true) . "\n";
+}
+$strict = [];
+$s = idn_to_ascii($in, IDNA_USE_STD3_RULES, INTL_IDNA_VARIANT_UTS46, $strict);
+echo "std3=" . (is_string($s) ? bin2hex($s) : var_export($s, true)) . " errors=" . ($strict['errors'] ?? 'x') . "\n";
 echo "DONE\n";

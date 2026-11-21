@@ -1,33 +1,30 @@
 <?php
-echo "PHP " . PHP_VERSION . "\n";
-
-class F extends php_user_filter {
-    function filter($in, $out, &$consumed, $closing): int {
-        echo "FILTER closing=" . (int)$closing . "\n";
-        if (!$closing && empty($GLOBALS["did"])) {
-            $GLOBALS["did"] = 1;
-            echo "REMOVE begin\n";
-            $r = @stream_filter_remove($GLOBALS["fres"]);
-            echo "REMOVE " . var_export($r, true) . "\n";
-        }
-        while ($b = stream_bucket_make_writeable($in)) {
-            $consumed += $b->datalen;
-            $b->data .= "X";
-            stream_bucket_append($out, $b);
-        }
-        return PSFS_PASS_ON;
-    }
-    function onClose(): void {
-        echo "ONCLOSE\n";
+/* Array ASSIGN_DIM with a null key under the tracing JIT.
+ * zend_jit_fetch_dim_w_helper() frees the OP_DATA TMP when the null-offset
+ * deprecation changes the array refcount, then zend_jit_assign_dim_fetch_w_helper()
+ * frees that same TMP again. */
+class D {
+    public function __destruct() {
+        echo "dtor\n";
     }
 }
 
-stream_filter_register("myf", "F");
-$fp = fopen("php://memory", "w+b");
-fwrite($fp, "hello");
-rewind($fp);
-$GLOBALS["fres"] = stream_filter_append($fp, "myf", STREAM_FILTER_READ);
-echo "READ\n";
-$d = @stream_get_contents($fp);
-echo "DATA " . var_export($d, true) . "\n";
-echo "DONE\n";
+function boom(object $box): void {
+    $box->a = [1];
+    $box->a[null] = new D();
+}
+
+$box = new stdClass();
+$box->a = [1];
+
+set_error_handler(static function (int $no, string $msg) use ($box): bool {
+    if (strpos($msg, 'null as an array offset') !== false) {
+        $box->a = null;
+    }
+    return true;
+});
+
+for ($i = 0; $i < 30; $i++) {
+    boom($box);
+}
+echo "survived\n";

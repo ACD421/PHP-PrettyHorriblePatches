@@ -1,199 +1,94 @@
 <?php
 /**
- * DNS wildcard in a peer certificate is accepted as an IP address and as
- * every single-label hostname. Loopback only.
+ * FILTER_VALIDATE_URL host confusion.
+ * Prints filter_var next to parse_url, then the host a WHATWG client and curl use.
+ * Curl targets are integer forms of 127.0.0.1 on port 1 only.
  */
-error_reporting(E_ALL);
+error_reporting(E_ALL & ~E_DEPRECATED);
 
-$dir = sys_get_temp_dir() . '/tls-wild-' . getmypid();
-mkdir($dir, 0700, true);
+echo "PHP_VERSION=" . PHP_VERSION . "\n";
 
-function cnf_write(string $path, string $extra): void {
-    file_put_contents($path, <<<CFG
-[ req ]
-distinguished_name = dn
-default_md = sha256
-prompt = no
-[ dn ]
-countryName = US
-organizationName = Probe
-commonName = placeholder
-[ v3_ca ]
-basicConstraints = critical,CA:TRUE
-keyUsage = keyCertSign, cRLSign
-[ usr_cert ]
-basicConstraints = CA:FALSE
-keyUsage = digitalSignature, keyEncipherment
-extendedKeyUsage = serverAuth
-$extra
-CFG);
-}
+function dump_case(string $label, string $url, bool $curl): void {
+    $filtered = filter_var($url, FILTER_VALIDATE_URL);
+    $parts = parse_url($url);
+    $host = is_array($parts) ? ($parts['host'] ?? null) : null;
+    $scheme = is_array($parts) ? ($parts['scheme'] ?? null) : null;
+    $as_ip = is_string($host) ? filter_var($host, FILTER_VALIDATE_IP) : false;
 
-function new_key() {
-    $k = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
-    if ($k === false) {
-        fwrite(STDERR, "pkey: ".openssl_error_string()."\n");
-        exit(1);
+    echo "---- {$label} ----\n";
+    echo "filter_var=" . json_encode($filtered, JSON_UNESCAPED_SLASHES) . "\n";
+    echo "parse_url=" . json_encode($parts, JSON_UNESCAPED_SLASHES) . "\n";
+    echo "parse_host=" . json_encode($host, JSON_UNESCAPED_SLASHES)
+        . " parse_scheme=" . json_encode($scheme)
+        . " filter_validate_ip=" . json_encode($as_ip, JSON_UNESCAPED_SLASHES) . "\n";
+
+    $whatwg_host = null;
+    if (class_exists('Uri\\WhatWg\\Url')) {
+        $errors = null;
+        $w = Uri\WhatWg\Url::parse($url, null, $errors);
+        if ($w === null) {
+            echo "whatwg_host=null\n";
+        } else {
+            $whatwg_host = $w->getAsciiHost();
+            echo "whatwg_scheme=" . json_encode($w->getScheme())
+                . " whatwg_host=" . json_encode($whatwg_host, JSON_UNESCAPED_SLASHES)
+                . " whatwg_path=" . json_encode($w->getPath(), JSON_UNESCAPED_SLASHES)
+                . " whatwg_url=" . json_encode($w->toAsciiString(), JSON_UNESCAPED_SLASHES) . "\n";
+        }
+    } else {
+        echo "whatwg_host=unavailable\n";
     }
-    return $k;
-}
 
-$caCnf = $dir.'/ca.cnf';
-cnf_write($caCnf, '');
-$caKey = new_key();
-$caCsr = openssl_csr_new(['commonName' => 'Probe CA', 'organizationName' => 'Probe'], $caKey, [
-    'config' => $caCnf, 'digest_alg' => 'sha256', 'x509_extensions' => 'v3_ca',
-]);
-$ca = openssl_csr_sign($caCsr, null, $caKey, 2, [
-    'config' => $caCnf, 'digest_alg' => 'sha256', 'x509_extensions' => 'v3_ca',
-]);
-if ($ca === false) {
-    fwrite(STDERR, "ca sign: ".openssl_error_string()."\n");
-    exit(1);
-}
-$caFile = $dir.'/ca.pem';
-openssl_x509_export_to_file($ca, $caFile);
-
-function leaf_pem(string $dir, string $caFile, $ca, $caKey, string $cn, string $san): string {
-    $cnf = $dir.'/leaf-'.md5($san.$cn).'.cnf';
-    cnf_write($cnf, "subjectAltName = $san\n");
-    $key = new_key();
-    $dn = ['organizationName' => 'Probe', 'commonName' => $cn];
-    $opts = ['config' => $cnf, 'digest_alg' => 'sha256', 'req_extensions' => 'usr_cert', 'x509_extensions' => 'usr_cert'];
-    $csr = openssl_csr_new($dn, $key, $opts);
-    $cert = openssl_csr_sign($csr, $ca, $caKey, 2, $opts);
-    if ($cert === false) {
-        fwrite(STDERR, "leaf sign ($san): ".openssl_error_string()."\n");
-        exit(1);
-    }
-    $pem = $dir.'/leaf-'.md5($san.$cn).'.pem';
-    $certTxt = '';
-    $keyTxt = '';
-    openssl_x509_export($cert, $certTxt);
-    openssl_pkey_export($key, $keyTxt);
-    file_put_contents($pem, $certTxt.$keyTxt);
-    $parsed = openssl_x509_parse($cert);
-    echo "CERT cn=".($parsed['subject']['CN'] ?? '?')." san=".($parsed['extensions']['subjectAltName'] ?? 'none')."\n";
-    return $pem;
-}
-
-function try_connect(string $pem, string $caFile, string $targetHost, ?string $peerName = null): string {
-    $port = null;
-    for ($i = 0; $i < 40; $i++) {
-        $p = 25000 + (($i * 131 + getmypid()) % 15000);
-        $probe = @stream_socket_server("tcp://127.0.0.1:$p", $errno, $errstr);
-        if ($probe) {
-            fclose($probe);
-            $port = $p;
-            break;
+    $curl_target = null;
+    if ($curl && function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_NOBODY => true,
+            CURLOPT_CONNECTTIMEOUT_MS => 800,
+            CURLOPT_TIMEOUT_MS => 1200,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+        ]);
+        curl_exec($ch);
+        $curl_target = curl_error($ch);
+        $errno = curl_errno($ch);
+        $primary = curl_getinfo($ch, CURLINFO_PRIMARY_IP);
+        echo "curl_errno={$errno} curl_primary_ip=" . json_encode($primary)
+            . " curl_error=" . json_encode($curl_target) . "\n";
+        if (is_string($primary) && $primary !== '' && $primary !== '127.0.0.1') {
+            echo "ABORT non-loopback primary_ip\n";
+            exit(2);
         }
     }
-    if ($port === null) {
-        return "NOPORT";
+
+    $mismatch = false;
+    if ($filtered !== false && is_string($host)) {
+        if (is_string($whatwg_host) && strcasecmp($host, $whatwg_host) !== 0) {
+            $mismatch = true;
+        }
+        if (is_string($curl_target) && str_contains($curl_target, '127.0.0.1') && !str_contains($host, '127.0.0.1')) {
+            $mismatch = true;
+        }
     }
-    $srvPhp = dirname($pem).'/srv.php';
-    if (!is_file($srvPhp)) {
-        file_put_contents($srvPhp, <<<'PHP'
-<?php
-$pem = $argv[1];
-$port = (int)$argv[2];
-$ctx = stream_context_create(['ssl' => ['local_cert' => $pem]]);
-$srv = stream_socket_server("ssl://127.0.0.1:$port", $errno, $errstr, STREAM_SERVER_BIND|STREAM_SERVER_LISTEN, $ctx);
-if (!$srv) { fwrite(STDERR, "bind $errstr\n"); exit(2); }
-$c = @stream_socket_accept($srv, 4);
-if ($c) { @fread($c, 4); fclose($c); }
-PHP);
-    }
-    $proc = proc_open([PHP_BINARY, $srvPhp, $pem, (string)$port], [1 => ['pipe','w'], 2 => ['pipe','w']], $pipes);
-    if (!is_resource($proc)) {
-        return "SPAWN_FAIL";
-    }
-    usleep(150000);
-    $ssl = [
-        'verify_peer' => true,
-        'verify_peer_name' => true,
-        'cafile' => $caFile,
-        'verify_depth' => 5,
-    ];
-    if ($peerName !== null) {
-        $ssl['peer_name'] = $peerName;
-    }
-    $ctx = stream_context_create(['ssl' => $ssl]);
-    $errno = 0; $errstr = '';
-    $client = @stream_socket_client("ssl://{$targetHost}:{$port}", $errno, $errstr, 3, STREAM_CLIENT_CONNECT, $ctx);
-    $ok = is_resource($client);
-    if ($ok) {
-        fwrite($client, "hi");
-        fclose($client);
-    }
-    fclose($pipes[1]); fclose($pipes[2]);
-    proc_close($proc);
-    return ($ok ? "MATCH" : "REJECT")." host=$targetHost peer=".($peerName ?? '(url)')." err=".trim($errstr);
+    echo $mismatch ? "BUG host_mismatch=1\n" : "host_mismatch=0\n";
 }
 
-echo "PHP ".PHP_VERSION."\n";
+dump_case('decimal-integer', 'http://2130706433/', false);
+dump_case('decimal-integer-port1', 'http://2130706433:1/', true);
+dump_case('compressed-ipv4', 'http://127.1/', false);
+dump_case('compressed-ipv4-port1', 'http://127.1:1/', true);
+dump_case('hex-ipv4', 'http://0x7f000001/', false);
+dump_case('hex-ipv4-port1', 'http://0x7f000001:1/', true);
+dump_case('hex-dotted', 'http://0x7f.1/', false);
+dump_case('octal-dotted', 'http://0177.0.0.1/', false);
+dump_case('two-part', 'https://192.168/', false);
 
-$ipWild = leaf_pem($dir, $caFile, $ca, $caKey, 'other.example', 'DNS:*.0.0.1');
-echo "ip-wildcard ".try_connect($ipWild, $caFile, '127.0.0.1')."\n";
-
-$ipLit = leaf_pem($dir, $caFile, $ca, $caKey, 'other.example', 'DNS:127.0.0.1');
-echo "dns-ip-literal ".try_connect($ipLit, $caFile, '127.0.0.1')."\n";
-
-$star = leaf_pem($dir, $caFile, $ca, $caKey, 'other.example', 'DNS:*');
-echo "star-localhost ".try_connect($star, $caFile, '127.0.0.1', 'localhost')."\n";
-
-$stardot = leaf_pem($dir, $caFile, $ca, $caKey, 'other.example', 'DNS:*.');
-echo "star-dot ".try_connect($stardot, $caFile, '127.0.0.1', 'localhost')."\n";
-
-$control = leaf_pem($dir, $caFile, $ca, $caKey, 'legit.example', 'DNS:attacker.test');
-echo "control-dns-san ".try_connect($control, $caFile, '127.0.0.1', 'legit.example')."\n";
-
-$proper = leaf_pem($dir, $caFile, $ca, $caKey, 'www.example.org', 'DNS:*.example.org');
-echo "proper-one-label ".try_connect($proper, $caFile, '127.0.0.1', 'www.example.org')."\n";
-echo "proper-two-label ".try_connect($proper, $caFile, '127.0.0.1', 'a.b.example.org')."\n";
-
-if (function_exists('curl_init')) {
-    $secret = $dir.'/secret.txt';
-    file_put_contents($secret, "SECRETDATA-CURL\n");
-    $srv = <<<'PHP'
-<?php
-$secret = $argv[1];
-$listen = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-if (!$listen) { fwrite(STDERR, $errstr); exit(2); }
-echo stream_socket_get_name($listen, false), "\n";
-fflush(STDOUT);
-foreach (['file', 'gopher', 'phar'] as $kind) {
-    $c = @stream_socket_accept($listen, 3);
-    if (!$c) { break; }
-    fread($c, 8192);
-    if ($kind === 'file') {
-        $loc = 'file://'.$secret;
-    } elseif ($kind === 'gopher') {
-        $loc = 'gopher://127.0.0.1:1/_x';
-    } else {
-        $loc = 'phar://'.$secret;
-    }
-    fwrite($c, "HTTP/1.1 302 Found\r\nLocation: $loc\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-    fclose($c);
-}
-PHP;
-    $srvFile = $dir.'/hs.php';
-    file_put_contents($srvFile, $srv);
-    $proc = proc_open([PHP_BINARY, $srvFile, $secret], [1 => ['pipe','w'], 2 => ['pipe','w']], $pipes);
-    $addr = trim(fgets($pipes[1]));
-    foreach (['file', 'gopher', 'phar'] as $kind) {
-        $ch = curl_init('http://'.$addr.'/'.$kind);
-        curl_setopt_array($ch, [
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 3,
-        ]);
-        $b = curl_exec($ch);
-        $leak = is_string($b) && str_contains($b, 'SECRETDATA');
-        echo "follow_$kind ".($leak ? 'LEAK' : 'BLOCK')." err=".curl_error($ch)." redir=".curl_getinfo($ch, CURLINFO_REDIRECT_URL)."\n";
-    }
-    fclose($pipes[1]); fclose($pipes[2]);
-    proc_close($proc);
-}
+dump_case('backslash-ws', 'ws://127.0.0.1\\foo/', false);
+dump_case('backslash-wss', 'wss://127.0.0.1\\foo/', false);
+dump_case('backslash-ftp', 'ftp://127.0.0.1\\foo/', false);
+dump_case('backslash-http-rejected', 'http://127.0.0.1\\foo/', false);
+dump_case('backslash-userinfo-rejected', 'http://evil.example\\@127.0.0.1/', false);
+dump_case('tab-rejected', "http://exampl\te.com/", false);
 
 echo "DONE\n";

@@ -1,25 +1,32 @@
 <?php
-/**
- * ArrayObject::__unserialize() accepts any Iterator as the iterator class.
- * setIteratorClass() and the constructor require an ArrayIterator subclass.
- * getIterator() allocates a spl_array_object but stamps SplDoublyLinkedList's
- * handlers on it. free_obj then reads that object as a spl_dllist_object.
- */
-echo "PHP_VERSION=" . PHP_VERSION . "\n";
+echo "PHP " . PHP_VERSION . "\n";
 
-$a = new ArrayObject([1, 2, 3]);
-$payload = $a->__serialize();
-/* SplDoublyLinkedList implements Iterator, so __unserialize accepts it.
- * setIteratorClass() would reject it (not an ArrayIterator subclass). */
-$payload[3] = SplDoublyLinkedList::class;
+$date = "2020-01-01 00:00:00.000000";
+$off = 'O:8:"DateTime":3:{s:4:"date";s:26:"' . $date . '";s:13:"timezone_type";i:1;s:8:"timezone";s:7:"+2 days";}';
+$ctl = 'O:8:"DateTime":3:{s:4:"date";s:26:"' . $date . '";s:13:"timezone_type";i:1;s:8:"timezone";s:6:"+00:00";}';
 
-$b = new ArrayObject();
-$b->__unserialize($payload);
-echo "iterator_class=" . $b->getIteratorClass() . "\n";
+$bad = unserialize($off);
+$ok = unserialize($ctl);
+echo "unserialize tz +2 days => " . $bad->format("Y-m-d H:i:s T") . " ts=" . $bad->getTimestamp() . "\n";
+echo "unserialize tz +00:00 => " . $ok->format("Y-m-d H:i:s T") . " ts=" . $ok->getTimestamp() . "\n";
+echo "delta_sec=" . ($bad->getTimestamp() - $ok->getTimestamp()) . "\n";
 
-$it = $b->getIterator();
-echo "got class=" . get_class($it) . "\n";
-/* Destructor treats the spl_array_object as spl_dllist_object and
- * decrements a refcount through the mis-read traverse_pointer. */
-unset($it);
-echo "survived_unset\n";
+$abbr = DateTime::__set_state([
+    "date" => $date,
+    "timezone_type" => 2,
+    "timezone" => "+1 day",
+]);
+echo "set_state abbr +1 day => " . $abbr->format("Y-m-d H:i:s T") . " ts=" . $abbr->getTimestamp() . "\n";
+
+$d = new DateTime("2000-01-01 00:00:00 UTC");
+$d->setDate(PHP_INT_MAX, 1, 1);
+echo "maxyear Y=" . $d->format("Y") . " U=" . $d->format("U") . "\n";
+
+$g = getdate(PHP_INT_MIN);
+echo "getdate INT_MIN mon=" . $g["mon"] . " month=" . $g["month"] . " year=" . $g["year"] . "\n";
+echo "date F INT_MIN=" . date("F", PHP_INT_MIN) . "\n";
+
+$c = date_create("2020-01-01 00:00:00 +999999");
+echo "off999999 " . ($c ? $c->format("c") . " getOffset=" . $c->getOffset() : "false") . "\n";
+
+echo "DONE\n";

