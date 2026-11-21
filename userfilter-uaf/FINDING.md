@@ -1,4 +1,4 @@
-# Finding E3 (CVSS 9.2): user-filter UAF to write_property hijack to system()
+# Finding E1 (CVSS 9.2): user-filter UAF to write_property hijack to system()
 
 **Status:** 6/6 on stock release builds, run under a full cPanel-style
 `disable_functions` list (`exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source`):

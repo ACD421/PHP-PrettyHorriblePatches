@@ -12,17 +12,17 @@ Independently verified, receipt-backed security research against the current PHP
 
 | # | Finding | CVSS | Vector | Result | Folder |
 |:-:|---------|:----:|--------|--------|--------|
-| E3 | user-filter UAF -> `write_property` hijack -> `system()` | **9.2** | `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H` | **18/18 markers on all three tips under full cPanel-style `disable_functions`**. 8.4/8.5: dual-channel (f1 leak handler fires the exploit). 8.6.0*: direct-fire (f1 confusion fixed there). Gadget-popen, pure-PHP ELF libc resolution, bucket-data reclaim. **(active development: final form in progress, current form proven on 8.4.28, 8.5.13, 8.6.0)** | `userfilter-uaf/` |
-| E1 | Cross-pool opcache function-dispatch confusion | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | `disable_functions` bypass with OS command execution at default ini, 12/12 across all tips + Debian pkg; cPanel-style list gives arbitrary file read on all tips; invoked path gdb-identified (`php_exec` family -> libc `popen`) | `crosspool/` |
-| E2 | `open_basedir` relative-entry expansion escape | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | Full filesystem access on all three tips when a relative entry exists in the active basedir. Full-escape state (inherited cwd > PATH_MAX + raw entry) reads `/etc/passwd` outside the jail on 8.4.28 and 8.5.13; 8.6.0 normalizes deep cwd and resists | `basedir-relentry/` |
+| E1 | user-filter UAF -> `write_property` hijack -> `system()` | **9.2** | `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H` | **18/18 markers on all three tips under full cPanel-style `disable_functions`**. 8.4/8.5: dual-channel (f1 leak handler fires the exploit). 8.6.0*: direct-fire (f1 confusion fixed there). Gadget-popen, pure-PHP ELF libc resolution, bucket-data reclaim. **(active development: final form in progress, current form proven on 8.4.28, 8.5.13, 8.6.0)** | `userfilter-uaf/` |
+| E2 | Cross-pool opcache function-dispatch confusion | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | `disable_functions` bypass with OS command execution at default ini, 12/12 across all tips + Debian pkg; cPanel-style list gives arbitrary file read on all tips; invoked path gdb-identified (`php_exec` family -> libc `popen`) | `crosspool/` |
+| E3 | `open_basedir` relative-entry expansion escape | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | Full filesystem access on all three tips when a relative entry exists in the active basedir. Full-escape state (inherited cwd > PATH_MAX + raw entry) reads `/etc/passwd` outside the jail on 8.4.28 and 8.5.13; 8.6.0 normalizes deep cwd and resists | `basedir-relentry/` |
 
 **CVSS 3.1 computed from formula.**
 
-### E3 active-development caveat
+### E1 active-development caveat
 
-The E3 exploit is in active development toward its final form. The current implementation (v12) is a proven, receipt-backed, 18/18 working exploit on PHP 8.4.28, 8.5.13, and 8.6.0 under full cPanel-style disable_functions. The final form will remove the remaining /proc dependency (reads for beacon-scan, writes for pointer patching). The UAF, reclaim, gadget, and popen mechanics are final; only the address-resolution layer is being refined.
+The E1 exploit is in active development toward its final form. The current implementation (v12) is a proven, receipt-backed, 18/18 working exploit on PHP 8.4.28, 8.5.13, and 8.6.0 under full cPanel-style disable_functions. The final form will remove the remaining /proc dependency (reads for beacon-scan, writes for pointer patching). The UAF, reclaim, gadget, and popen mechanics are final; only the address-resolution layer is being refined.
 
-### E3 notes
+### E1 notes
 
 - 8.6.0 uses the direct-fire path (after unserialize) because the f1 confusion is fixed there; the UAF, reclaim, gadget, and popen fire identically. Marked * for the dual-channel leak integration only.
 - All tips: fire-once per process. The command executes (marker is ground truth), then the process dies with SIGSEGV during teardown.
@@ -31,13 +31,13 @@ The E3 exploit is in active development toward its final form. The current imple
 
 ## Complete Vulnerability Inventory, all 47 findings, each with its PoC
 
-Findings are numbered sequentially by severity (1-47, most severe first). E3 = #1 (9.2), E1 = #2 (7.9), E2 = #3 (7.9). Corpus cross-reference: E3 was corpus #7, E1 was #37, E2 was #49.
+Findings are numbered sequentially by severity (1-47, most severe first). E1 = #1 (9.2), E2 = #2 (7.9), E3 = #3 (7.9). Corpus cross-reference: E1 was corpus #7, E1 was #37, E2 was #49.
 
 | # | Finding | Sev | Component | Status on 11-19 tips | PoC |
 |:-:|---------|:---:|-----------|----------------------|:---:|
-| 1 | stream_filter_remove from inside filter() frees the active user filter and use-after-frees it | **-> E3** | ext/standard user filters | STILL PRESENT, fresh-verified 11-20 | userfilter-uaf/ |
-| 2 | FPM pools that share opcache run internal calls against the wrong disable_functions table | **-> E1** | FPM/OPcache | STILL PRESENT, fresh-verified 11-20 | crosspool/ |
-| 3 | open_basedir escape: getcwd failure stores literal ../ | **-> E2** | main/fopen_wrappers.c open_basedir | STILL PRESENT, fresh-verified 11-20 | basedir-relentry/ |
+| 1 | stream_filter_remove from inside filter() frees the active user filter and use-after-frees it | **-> E1** | ext/standard user filters | STILL PRESENT, fresh-verified 11-20 | userfilter-uaf/ |
+| 2 | FPM pools that share opcache run internal calls against the wrong disable_functions table | **-> E2** | FPM/OPcache | STILL PRESENT, fresh-verified 11-20 | crosspool/ |
+| 3 | open_basedir escape: getcwd failure stores literal ../ | **-> E3** | main/fopen_wrappers.c open_basedir | STILL PRESENT, fresh-verified 11-20 | basedir-relentry/ |
 | 4 | Failed unserialize leaves Exception::$trace as an object; getTraceAsString walks it as a HashTable | **high** | unserialize | STILL PRESENT, fresh-verified 11-20 | highs/ |
 | 5 | quoted-printable encode reads past the chunk when line-break-chars starts with SP or TAB | **high** | ext/standard convert.quoted-printable-en | STILL PRESENT, fresh-verified 11-20 | highs/ |
 | 6 | DOMXPath namespace-axis callback UAF of a foreign document element | **high** | ext/dom | STILL PRESENT (source-verified vs 8.5.13/8.4.28) | pocs/f6/ |
@@ -111,25 +111,25 @@ Findings are numbered sequentially by severity (1-47, most severe first). E3 = #
 | Weapon | What it does |
 |--------|-------------|
 | `crosspool/poc/fcgi_client.py` | FastCGI responder client |
-| `crosspool/poc/run_multi1.sh` | E1 RCE check |
-| `basedir-relentry/poc/poc-f49d.php` | E2 CLI climb |
-| `basedir-relentry/poc/poc-f49win3.php` | E2 full-escape probe |
-| `userfilter-uaf/poc/ip_noffi_v12.php` | **E3 end-to-end dual-channel exploit: 18/18, all tips** |
+| `crosspool/poc/run_multi1.sh` | E2 RCE check |
+| `basedir-relentry/poc/poc-f49d.php` | E3 CLI climb |
+| `basedir-relentry/poc/poc-f49win3.php` | E3 full-escape probe |
+| `userfilter-uaf/poc/ip_noffi_v12.php` | **E1 end-to-end dual-channel exploit: 18/18, all tips** |
 | `pocs/f1...f47` | All 47 corpus PoCs |
 
 ## Receipts
 
 | Target | Chain | Receipt |
 |--------|-------|---------|
-| php:8.4-fpm, default ini | E1 | **marker all tips** |
-| php:8.4-fpm, cPanel list | E1 readfile | **`/etc/passwd` dump** |
-| php:8.4/8.5-cli, `-d jail:../` | E2 | **CWD=/ + `/etc/passwd`** |
-| php:8.4-cli, deep cwd + raw entry | E2 full escape | **`/etc/passwd` outside jail** |
+| php:8.4-fpm, default ini | E2 | **marker all tips** |
+| php:8.4-fpm, cPanel list | E2 readfile | **`/etc/passwd` dump** |
+| php:8.4/8.5-cli, `-d jail:../` | E3 | **CWD=/ + `/etc/passwd`** |
+| php:8.4-cli, deep cwd + raw entry | E3 full escape | **`/etc/passwd` outside jail** |
 | **php:8.4/8.5/8.6-cli, full cPanel disable_functions** | **E3** | **18/18 MARKER** |
 
 ## Status
 
-**This work is still in progress. Updates will be pushed starting November 22nd.** The E3 exploit is the primary active development target (removing the /proc dependency for the final form). Source-verified findings will receive execution receipts on a rolling basis.
+**This work is still in progress. Updates will be pushed starting November 22nd.** The E1 exploit is the primary active development target (removing the /proc dependency for the final form). Source-verified findings will receive execution receipts on a rolling basis.
 
 ## Disclaimer
 

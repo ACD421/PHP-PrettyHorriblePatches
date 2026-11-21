@@ -1,4 +1,4 @@
-# Finding E1 (CVSS 7.9): Cross-pool opcache function-dispatch confusion
+# Finding E2 (CVSS 7.9): Cross-pool opcache function-dispatch confusion
 
 **Status:** Live on 8.4.28 / 8.5.13 / 8.6.0 (official images) and Debian `php-fpm8.4` 8.4.28-1.
 Verified at **default ini** (no `file_update_protection` override, no explicit `opcache.enable`).

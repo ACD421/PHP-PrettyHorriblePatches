@@ -1,4 +1,4 @@
-# Finding E2 (CVSS 7.9): open_basedir relative-entry expansion escape
+# Finding E3 (CVSS 7.9): open_basedir relative-entry expansion escape
 
 **Status:** The relative entry itself must come from the imposed configuration
 (`-d`, ini file, pool config, or `.user.ini`), so this is documented as a hardening
