@@ -127,6 +127,10 @@ Findings are numbered sequentially by severity (1-47). E1 = #1, E2 = #2, E3 = #5
 | php:8.4-cli, deep cwd + raw entry | E2 full escape | **`/etc/passwd` outside jail** |
 | **php:8.4/8.5/8.6-cli, full cPanel disable_functions** | **E3** | **18/18 MARKER** |
 
+## Status
+
+**This work is still in progress. Updates will be pushed starting November 22nd.** The E3 exploit is the primary active development target (removing the /proc dependency for the final form). Source-verified findings will receive execution receipts on a rolling basis.
+
 ## Disclaimer
 
 This material is security research for **defensive** and **authorized** testing only.
