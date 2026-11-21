@@ -4,7 +4,7 @@ Independently verified, receipt-backed security research against the current PHP
 
 **Authors:** [@acd421](https://x.com/acd421)
 **Date:** 2026-11-20/21 (America/Chicago)
-**Currency:** PHP **8.4.28 / 85.13 / 8.6.0**, php.net newest as of 2026-11-19; verified inside the images with `PHP_VERSION`.
+**Currency:** PHP **8.4.28 / 8.5.13 / 8.6.0**, php.net newest as of 2026-11-19; verified inside the images with `PHP_VERSION`.
 
 ---
 
@@ -13,7 +13,7 @@ Independently verified, receipt-backed security research against the current PHP
 | # | Finding | CVSS | Vector | Result | Folder |
 |:-:|---------|:----:|--------|--------|--------|
 | E1 | Cross-pool opcache function-dispatch confusion | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | `disable_functions` bypass with OS command execution at default ini, 12/12 across all tips + Debian pkg; cPanel-style list gives arbitrary file read on all tips; invoked path gdb-identified (`php_exec` family -> libc `popen`) | `crosspool/` |
-| E2 | `open_basedir` relative-entry expansion escape | **7.7** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | Full filesystem access on all three tips when a relative entry exists in the active basedir. Full-escape state (inherited cwd > PATH_MAX + raw entry) reads `/etc/passwd` outside the jail on 8.4.28 and 8.5.13; 8.6.0 normalizes deep cwd and resists | `basedir-relentry/` |
+| E2 | `open_basedir` relative-entry expansion escape | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | Full filesystem access on all three tips when a relative entry exists in the active basedir. Full-escape state (inherited cwd > PATH_MAX + raw entry) reads `/etc/passwd` outside the jail on 8.4.28 and 8.5.13; 8.6.0 normalizes deep cwd and resists | `basedir-relentry/` |
 | E3 | user-filter UAF -> `write_property` hijack -> `system()` | **9.2** | `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H` | **18/18 markers on all three tips under full cPanel-style `disable_functions`**. 8.4/8.5: dual-channel (f1 leak handler fires the exploit). 8.6.0*: direct-fire (f1 confusion fixed there). Gadget-popen, pure-PHP ELF libc resolution, bucket-data reclaim. **(active development: final form in progress, current form proven on 8.4.28, 8.5.13, 8.6.0)** | `userfilter-uaf/` |
 
 **CVSS 3.1 computed from formula.**
