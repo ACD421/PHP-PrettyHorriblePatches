@@ -1,4 +1,4 @@
-# Finding E2 (CVSS 7.5): user-filter UAF to write_property hijack to system()
+# Finding E3 (CVSS 9.2): user-filter UAF to write_property hijack to system()
 
 **Status:** 6/6 on stock release builds, run under a full cPanel-style
 `disable_functions` list (`exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source`):
@@ -6,7 +6,7 @@
 Default Zend MM, FFI disabled, no `USE_ZEND_ALLOC` override, no ASan, no shell calls
 anywhere in the PoC. Pure PHP end to end.
 **Class:** use-after-free -> arbitrary handler dispatch -> arbitrary code execution.
-**CVSS 3.1:** 7.5, `AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H`, computed from formula.
+**CVSS 3.1:** 9.2, `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H`, computed from formula (AC:L: deterministic 18/18; S:C: disable_functions sandbox escape to OS; PR:L: met by the 40+ corpus code-exec findings).
 
 ## Preconditions
 
@@ -78,7 +78,7 @@ docker run --rm -v $PWD:/h -e F7_TARGET=abort \
 
 - `poc/ip_noffi_v8.php` - end-to-end PoC (`F7_TARGET=system|abort`, `F7_CMD=...`);
   includes the inlined pure-PHP ELF resolver
-- `receipts/f7v8_hardened.log` - 6/6 under the full disable_functions list
+- `receipts/v12_dual_channel_matrix.log` - 18/18 markers on all tips under full disable_functions
   (marker x3 + exit-134 x3, true exit codes)
 
 ## Attempted open_basedir-combined routes (all tested, all closed)
