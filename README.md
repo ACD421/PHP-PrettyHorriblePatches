@@ -45,7 +45,7 @@ Findings are numbered sequentially by severity (1-47, most severe first). E1 = #
 | 8 | ArrayObject::__unserialize accepts a non-ArrayIterator and getIterator type-confuses destruction | **high** | ext/spl ArrayObject | STILL PRESENT (source-verified vs 8.5.13/8.4.28) | pocs/f8/ |
 | 9 | hash_copy of xxh3/xxh128 with a secret keeps a dangling extSecret pointer | **high** | ext/hash | STILL PRESENT (source-verified vs 8.5.13/8.4.28) | pocs/f9/ |
 | 10 | php-cgi fix_pathinfo PATH_INFO pointer underflow leaks environ and overflows the FastCGI env segment | **high** | sapi/cgi | FIXED 11-19 release | pocs/f10/ |
-| 11 | cli.prompt backtick parser use-after-free after ini_restore | **high** | ext/readline | STILL PRESENT (source-verified vs 8.5.13/8.4.28) | pocs/f11/ |
+| 11 | cli.prompt backtick parser use-after-free after ini_restore | **high** | ext/readline | STILL PRESENT (source-verified; PoC demonstrates the mechanism but does not crash on release builds) | pocs/f11/ |
 | 12 | json_encode UAF when jsonSerialize drops the last object reference | **high** | ext/json | STILL PRESENT, fresh-verified 11-20 | pocs/f12/ |
 | 13 | object_properties_load() skips typed-property checks during unserialize | med | unserialize | STILL PRESENT (source-verified vs 8.5.13/8.4.28) | pocs/f13/ |
 | 14 | Upload-progress key injected through php_serialize/php_binary is unserialized by the php session decoder | med | session | FIXED 11-19 release | pocs/f14/ |
