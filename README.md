@@ -26,51 +26,51 @@ Corpus: confirmed-findings research engagement (original proofs vs 8.5.12/8.4.27
 
 | # | Finding | Sev | Component | Status on 11-19 tips | PoC |
 |:-:|---------|:---:|-----------|----------------------|:---:|
+| 37 | FPM pools that share opcache run internal calls against the wrong disable_functions table | **→ E1** | FPM/OPcache | 🔴 Still present, fresh-verified 11-20 | crosspool/ |
+| 49 | open_basedir escape: getcwd failure stores literal ../ | **→ E2** | main/fopen_wrappers.c open_basedir | 🔴 Still present, fresh-verified 11-20 | basedir-relentry/ |
 | 1 | Failed unserialize leaves Exception::$trace as an object; getTraceAsString walks it as a HashTable | **high** | unserialize | 🔴 Still present, fresh-verified 11-20 | highs/ |
-| 2 | object_properties_load() skips typed-property checks during unserialize | med | unserialize | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f2/ |
-| 3 | Upload-progress key injected through php_serialize/php_binary is unserialized by the php session decoder | med | session | 🟢 Fixed 11-19 release | pocs/f3/ |
-| 4 | Progress value containing / clears an existing php-serializer session | low | session | 🟡 Unclear | pocs/f4/ |
-| 5 | max_input_time timer stays armed when max_execution_time is 0 | low | Zend timeout / request startup | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f5/ |
 | 6 | quoted-printable encode reads past the chunk when line-break-chars starts with SP or TAB | **high** | ext/standard convert.quoted-printable-en | 🔴 Still present, fresh-verified 11-20 | highs/ |
 | 7 | stream_filter_remove from inside filter() frees the active user filter and use-after-frees it | **→ E3** | ext/standard user filters | 🔴 Still present, fresh-verified 11-20 | userfilter-uaf/ |
-| 8 | Tar symlink resolution strips the entry filename and NULL-derefs in phar_stream_read | low | ext/phar | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f8/ |
-| 9 | proc_open truncates cwd, descriptor paths, and shell commands at NUL | med | ext/standard proc_open | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f9/ |
-| 10 | FILTER_VALIDATE_URL accepts non-canonical IPv4 hosts that clients dial as a different address | med | ext/filter FILTER_VALIDATE_URL | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f10/ |
-| 11 | FILTER_VALIDATE_URL accepts a backslash inside non-http hosts that WHATWG parses as a different host | low | ext/filter FILTER_VALIDATE_URL | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f11/ |
 | 12 | DOMXPath namespace-axis callback UAF of a foreign document element | **high** | ext/dom | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f12/ |
-| 13 | GD2 pixel 0xFFFFFFFD (gdBrushed) makes gdImageBrushApply recurse until stack overflow | low | ext/gd | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f13/ |
-| 14 | mb_ereg_replace copies past a truncated multibyte lead in the replacement | med | ext/mbstring | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f14/ |
-| 15 | mb_ereg_replace \k<digits> truncates the group number to 32 bits | low | ext/mbstring | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f15/ |
-| 16 | TLS name check accepts DNS wildcards as IP addresses and as every single-label host | med | openssl | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f16/ |
 | 17 | Tracing JIT double-frees ASSIGN_DIM OP_DATA after null-offset deprecation | **high** | opcache tracing JIT | 🟢 Fixed 11-19 release | pocs/f17/ |
 | 18 | ArrayObject::__unserialize accepts a non-ArrayIterator and getIterator type-confuses destruction | **high** | ext/spl ArrayObject | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f18/ |
-| 19 | ArrayObject USE_OTHER cycle recurses forever in spl_array_get_hash_table_ptr | low | ext/spl ArrayObject | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f19/ |
 | 20 | hash_copy of xxh3/xxh128 with a secret keeps a dangling extSecret pointer | **high** | ext/hash | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f20/ |
-| 21 | mhash_keygen_s2k truncates the output length through a 32-bit cast and still returns a key | low | ext/hash | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f21/ |
-| 22 | Argon2 password_get_info accepts an oversized cost and reports PHP_INT_MAX | low | ext/standard | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f22/ |
-| 23 | date_create("+999999") rewrites the year to 9999 and stores a +99:00 offset, with no error | med | ext/date | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f23/ |
-| 24 | DateTime unserialize/__set_state applies relative modifiers placed in the offset or abbreviation field | low | ext/date | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f24/ |
-| 25 | bcmath treats an embedded NUL as the end of the number and accepts the prefix | low | ext/bcmath | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f25/ |
-| 26 | SQLite3 TEXT fetch truncates at embedded NUL | low | ext/sqlite3 | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f26/ |
 | 27 | php-cgi fix_pathinfo PATH_INFO pointer underflow leaks environ and overflows the FastCGI env segment | **high** | sapi/cgi | 🟢 Fixed 11-19 release | pocs/f27/ |
+| 45 | cli.prompt backtick parser use-after-free after ini_restore | **high** | ext/readline | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f45/ |
+| 50 | json_encode UAF when jsonSerialize drops the last object reference | **high** | ext/json | 🔴 Still present, fresh-verified 11-20 | pocs/f50/ |
+| 2 | object_properties_load() skips typed-property checks during unserialize | med | unserialize | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f2/ |
+| 3 | Upload-progress key injected through php_serialize/php_binary is unserialized by the php session decoder | med | session | 🟢 Fixed 11-19 release | pocs/f3/ |
+| 9 | proc_open truncates cwd, descriptor paths, and shell commands at NUL | med | ext/standard proc_open | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f9/ |
+| 10 | FILTER_VALIDATE_URL accepts non-canonical IPv4 hosts that clients dial as a different address | med | ext/filter FILTER_VALIDATE_URL | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f10/ |
+| 14 | mb_ereg_replace copies past a truncated multibyte lead in the replacement | med | ext/mbstring | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f14/ |
+| 16 | TLS name check accepts DNS wildcards as IP addresses and as every single-label host | med | openssl | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f16/ |
+| 23 | date_create("+999999") rewrites the year to 9999 and stores a +99:00 offset, with no error | med | ext/date | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f23/ |
 | 28 | PHP-FPM HTML status page reflects auth_user, request method, and script path without encoding | med | sapi/fpm | 🟢 Fixed 11-19 release | pocs/f28/ |
 | 29 | Win32 path guard skips multiple trailing dots, so name.php.. creates and opens name.php | med | win32 | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f29/ |
 | 30 | Session files on Windows follow symlinks because O_NOFOLLOW is 0 | med | ext/session | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f30/ |
 | 31 | Lazy proxy subclass hook slot is not cleared and is read back instead of the real instance | med | Zend lazy objects / property hooks | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f31/ |
-| 32 | DFA turns post-inc/post-dec comparisons into pre-inc/pre-dec for floats and PHP_INT_MAX | low | opcache DFA | 🟡 Partial | pocs/f32/ |
 | 33 | idn_to_ascii() default maps U+FF20 to @ and reports a successful hostname | med | ext/intl IDN | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f33/ |
 | 34 | WHATWG URL host parser accepts overlong UTF-8 and emits a different ASCII host | med | ext/uri (lexbor WHATWG URL) | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f34/ |
-| 37 | FPM pools that share opcache run internal calls against the wrong disable_functions table | **→ E1** | FPM/OPcache | 🔴 Still present, fresh-verified 11-20 | crosspool/ |
 | 38 | curl_reset leaves CURLFile/CURLStringFile postfields; copy and clone resend the body | med | ext/curl | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f38/ |
+| 43 | socket_connect() truncates the destination port to 16 bits | med | ext/sockets | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f43/ |
+| 44 | 8.4 socket_bind, socket_sendto, and socket_create_listen truncate out-of-range ports | med | ext/sockets | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f44/ |
+| 4 | Progress value containing / clears an existing php-serializer session | low | session | 🟡 Unclear | pocs/f4/ |
+| 5 | max_input_time timer stays armed when max_execution_time is 0 | low | Zend timeout / request startup | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f5/ |
+| 8 | Tar symlink resolution strips the entry filename and NULL-derefs in phar_stream_read | low | ext/phar | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f8/ |
+| 11 | FILTER_VALIDATE_URL accepts a backslash inside non-http hosts that WHATWG parses as a different host | low | ext/filter FILTER_VALIDATE_URL | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f11/ |
+| 13 | GD2 pixel 0xFFFFFFFD (gdBrushed) makes gdImageBrushApply recurse until stack overflow | low | ext/gd | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f13/ |
+| 15 | mb_ereg_replace \k<digits> truncates the group number to 32 bits | low | ext/mbstring | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f15/ |
+| 19 | ArrayObject USE_OTHER cycle recurses forever in spl_array_get_hash_table_ptr | low | ext/spl ArrayObject | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f19/ |
+| 21 | mhash_keygen_s2k truncates the output length through a 32-bit cast and still returns a key | low | ext/hash | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f21/ |
+| 22 | Argon2 password_get_info accepts an oversized cost and reports PHP_INT_MAX | low | ext/standard | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f22/ |
+| 24 | DateTime unserialize/__set_state applies relative modifiers placed in the offset or abbreviation field | low | ext/date | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f24/ |
+| 25 | bcmath treats an embedded NUL as the end of the number and accepts the prefix | low | ext/bcmath | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f25/ |
+| 26 | SQLite3 TEXT fetch truncates at embedded NUL | low | ext/sqlite3 | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f26/ |
+| 32 | DFA turns post-inc/post-dec comparisons into pre-inc/pre-dec for floats and PHP_INT_MAX | low | opcache DFA | 🟡 Partial | pocs/f32/ |
 | 39 | iconv Q encoded-word decode stops at the first raw NUL | low | ext/iconv | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f39/ |
 | 40 | pack() kills the process at the hard memory limit | low | ext/standard pack | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f40/ |
 | 41 | sprintf() kills the process at the hard memory limit | low | ext/standard sprintf | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f41/ |
 | 42 | pack() truncates repeat counts that do not fit in a C int | low | ext/standard pack | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f42/ |
-| 43 | socket_connect() truncates the destination port to 16 bits | med | ext/sockets | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f43/ |
-| 44 | 8.4 socket_bind, socket_sendto, and socket_create_listen truncate out-of-range ports | med | ext/sockets | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f44/ |
-| 45 | cli.prompt backtick parser use-after-free after ini_restore | **high** | ext/readline | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f45/ |
-| 49 | open_basedir escape: getcwd failure stores literal ../ | **→ E2** | main/fopen_wrappers.c open_basedir | 🔴 Still present, fresh-verified 11-20 | basedir-relentry/ |
-| 50 | json_encode UAF when jsonSerialize drops the last object reference | **high** | ext/json | 🔴 Still present, fresh-verified 11-20 | pocs/f50/ |
 | 51 | HTML template adoptNode drops template contents and leaves them on the source document | low | dom | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f51/ |
 | 52 | HTML template cloneNode(true) and cross-document importNode(true) drop template contents | low | dom | 🔴 Still present (source-verified vs 8.5.13/8.4.28) | pocs/f52/ |
 
