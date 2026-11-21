@@ -14,9 +14,13 @@ Independently verified, receipt-backed security research against the current PHP
 |:-:|---------|:----:|--------|--------|--------|
 | E1 | Cross-pool opcache function-dispatch confusion | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | `disable_functions` bypass with OS command execution at default ini, 12/12 across all tips + Debian pkg; cPanel-style list gives arbitrary file read on all tips; invoked path gdb-identified (`php_exec` family -> libc `popen`) | `crosspool/` |
 | E2 | `open_basedir` relative-entry expansion escape | **7.7** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | Full filesystem access on all three tips when a relative entry exists in the active basedir. Full-escape state (inherited cwd > PATH_MAX + raw entry) reads `/etc/passwd` outside the jail on 8.4.28 and 8.5.13; 8.6.0 normalizes deep cwd and resists | `basedir-relentry/` |
-| E3 | user-filter UAF -> `write_property` hijack -> `system()` | **9.2** | `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H` | **18/18 markers on all three tips under full cPanel-style `disable_functions`**. 8.4/8.5: dual-channel (f1 leak handler fires the exploit). 8.6.0*: direct-fire (f1 confusion fixed there). Gadget-popen, pure-PHP ELF libc resolution, bucket-data reclaim | `userfilter-uaf/` |
+| E3 | user-filter UAF -> `write_property` hijack -> `system()` | **9.2** | `AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H` | **18/18 markers on all three tips under full cPanel-style `disable_functions`**. 8.4/8.5: dual-channel (f1 leak handler fires the exploit). 8.6.0*: direct-fire (f1 confusion fixed there). Gadget-popen, pure-PHP ELF libc resolution, bucket-data reclaim. **(active development: final form in progress, current form proven on 8.4.28, 8.5.13, 8.6.0)** | `userfilter-uaf/` |
 
 **CVSS 3.1 computed from formula.**
+
+### E3 active-development caveat
+
+The E3 exploit is in active development toward its final form. The current implementation (v12) is a proven, receipt-backed, 18/18 working exploit on PHP 8.4.28, 8.5.13, and 8.6.0 under full cPanel-style disable_functions. The final form will remove the remaining /proc dependency (reads for beacon-scan, writes for pointer patching). The UAF, reclaim, gadget, and popen mechanics are final; only the address-resolution layer is being refined.
 
 ### E3 notes
 
