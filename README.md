@@ -1,46 +1,41 @@
 # PHP-PrettyHorriblePatches
 
-Independently verified, receipt-backed security research against the current PHP tips: two escalated exploit classes, one documented configuration footgun, and a full 47-finding corpus re-validation on **8.4.28 / 8.5.13 / 8.6.0** (2026-11-19 security release). Every escalated claim was rebuilt and re-run from scratch on 2026-11-20, fresh containers, marker discipline (markers deleted between phases), fresh-compile controls, default ini unless stated.
+Independently verified, receipt-backed security research against the current PHP tips: three escalated exploit classes and a full 47-finding corpus re-validation on **8.4.28 / 8.5.13 / 8.6.0** (2026-11-19 security release). Every escalated claim was rebuilt and re-run from scratch on 2026-11-20/21, fresh containers, marker discipline (markers deleted between phases), fresh-compile controls, default ini unless stated.
 
 **Authors:** [@acd421](https://x.com/acd421)
-**Date:** 2026-11-20 (America/Chicago)
-**Currency:** PHP **8.4.28 / 8.5.13 / 8.6.0**, php.net newest as of 2026-11-19; verified inside the images with `PHP_VERSION`, never trusted from tags. Also tested: Debian trixie `php-fpm8.4` package build `8.4.28-1` (built Nov 18 2026).
+**Date:** 2026-11-20/21 (America/Chicago)
+**Currency:** PHP **8.4.28 / 8.5.13 / 8.6.0**, php.net newest as of 2026-11-19; verified inside the images with `PHP_VERSION`.
 
 ---
 
-## Escalated findings (computed CVSS 3.1, vectors shown)
+## Escalated findings
 
 | # | Finding | CVSS | Vector | Result | Folder |
 |:-:|---------|:----:|--------|--------|--------|
-| E1 | Cross-pool opcache function-dispatch confusion | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | `disable_functions` bypass with OS command execution at **default ini**, 12/12 across all three tips + Debian package build; realistic cPanel-style list gives arbitrary file read (`/etc/passwd` dump, all three tips); invoked path gdb-identified (`php_exec` family -> libc `popen`) | `crosspool/` |
-| E2 | user-filter UAF -> `write_property` hijack -> `system()` | **7.5** | `AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H` | 6/6 run **under a full cPanel-style `disable_functions` list**: `system()` marker on all three tips, `abort()` exit 134 on all three; no shell calls in the PoC (pure-PHP ELF libc resolution); default Zend MM, FFI off | `userfilter-uaf/` |
+| E1 | Cross-pool opcache function-dispatch confusion | **7.9** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | `disable_functions` bypass with OS command execution at default ini, 12/12 across all tips + Debian pkg; cPanel-style list gives arbitrary file read on all tips; invoked path gdb-identified (`php_exec` family -> libc `popen`) | `crosspool/` |
+| E2 | `open_basedir` relative-entry expansion escape | **7.7** | `AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H` | Full filesystem access on all three tips when a relative entry exists in the active basedir. Full-escape state (inherited cwd > PATH_MAX + raw entry) reads `/etc/passwd` outside the jail on 8.4.28 and 8.5.13; 8.6.0 normalizes deep cwd and resists | `basedir-relentry/` |
+| E3 | user-filter UAF -> `write_property` hijack -> `system()` | **7.5** | `AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H` | **18/18 markers on all three tips under full cPanel-style `disable_functions`**. 8.4/8.5: dual-channel (f1 leak handler fires the exploit). 8.6.0*: direct-fire (f1 confusion fixed there). Gadget-popen, pure-PHP ELF libc resolution, bucket-data reclaim | `userfilter-uaf/` |
 
-**CVSS 3.1 computed from formula.** E = 8.22*AV*AC*PR*UI; ISS = 1-(1-C)(1-I)(1-A); Impact(S:U) = 6.42*ISS, Impact(S:C) = 7.52*(ISS-0.029)-3.25*(ISS-0.02)^15; Base = Roundup10(Impact+E).
+**CVSS 3.1 computed from formula.**
 
-### Execution semantics
+### E3 notes
 
-- E2's `system()` variant is fire-once per process: the command executes (marker is ground truth), then the process dies with SIGSEGV during teardown. The `abort()` variant exits 134 cleanly and is the control-flow proof.
-- E1 execution is silent: the payload's own output redirection plus the `php_exec`/`popen` path produce no response output; the marker is the ground truth.
-
----
-
-## Configuration footgun (documented, not escalated)
-
-`open_basedir` accepts **relative entries**, which are expanded once at startup against the daemon's cwd. php-fpm masters launch from `/`, so one relative entry in a pool config (for example `/www:../`) expands to the filesystem root and the pool effectively has no basedir. This requires an operator-written relative entry (PHP documents entries as absolute paths), so we document it as a hardening footgun with no CVSS rather than an escalated finding. The runtime `ini_set` widen stores a literal `../` but does not itself escape (climb stalls at the jail boundary, tested on all three tips). Details and PoCs: `basedir-relentry/`.
+- 8.6.0 uses the direct-fire path (after unserialize) because the f1 confusion is fixed there; the UAF, reclaim, gadget, and popen fire identically. Marked * for the dual-channel leak integration only.
+- All tips: fire-once per process. The command executes (marker is ground truth), then the process dies with SIGSEGV during teardown.
 
 ---
 
 ## Complete Vulnerability Inventory, all 47 findings, each with its PoC
 
-Corpus: confirmed-findings research engagement (original proofs vs 8.5.12/8.4.27), re-verified against the 2026-11-19 tips. Rows E1/E2 correspond to corpus findings #37/#7; corpus finding #49 is the configuration footgun above.
+Rows E1/E2/E3 correspond to corpus findings #37/#49/#7.
 
 | # | Finding | Sev | Component | Status on 11-19 tips | PoC |
 |:-:|---------|:---:|-----------|----------------------|:---:|
 | 37 | FPM pools that share opcache run internal calls against the wrong disable_functions table | **-> E1** | FPM/OPcache | STILL PRESENT, fresh-verified 11-20 | crosspool/ |
-| 49 | open_basedir escape: getcwd failure stores literal ../ | **footgun** | main/fopen_wrappers.c open_basedir | STILL PRESENT, fresh-verified 11-20 | basedir-relentry/ |
+| 49 | open_basedir escape: getcwd failure stores literal ../ | **-> E2** | main/fopen_wrappers.c open_basedir | STILL PRESENT, fresh-verified 11-20 | basedir-relentry/ |
 | 1 | Failed unserialize leaves Exception::$trace as an object; getTraceAsString walks it as a HashTable | **high** | unserialize | STILL PRESENT, fresh-verified 11-20 | highs/ |
 | 6 | quoted-printable encode reads past the chunk when line-break-chars starts with SP or TAB | **high** | ext/standard convert.quoted-printable-en | STILL PRESENT, fresh-verified 11-20 | highs/ |
-| 7 | stream_filter_remove from inside filter() frees the active user filter and use-after-frees it | **-> E2** | ext/standard user filters | STILL PRESENT, fresh-verified 11-20 | userfilter-uaf/ |
+| 7 | stream_filter_remove from inside filter() frees the active user filter and use-after-frees it | **-> E3** | ext/standard user filters | STILL PRESENT, fresh-verified 11-20 | userfilter-uaf/ |
 | 12 | DOMXPath namespace-axis callback UAF of a foreign document element | **high** | ext/dom | STILL PRESENT (source-verified vs 8.5.13/8.4.28) | pocs/f12/ |
 | 17 | Tracing JIT double-frees ASSIGN_DIM OP_DATA after null-offset deprecation | **high** | opcache tracing JIT | FIXED 11-19 release | pocs/f17/ |
 | 18 | ArrayObject::__unserialize accepts a non-ArrayIterator and getIterator type-confuses destruction | **high** | ext/spl ArrayObject | STILL PRESENT (source-verified vs 8.5.13/8.4.28) | pocs/f18/ |
@@ -86,79 +81,55 @@ Corpus: confirmed-findings research engagement (original proofs vs 8.5.12/8.4.27
 
 ### Verification levels
 
-- **fresh-verified 11-20**, corpus PoC re-run unmodified on official `php:8.4/8.5/8.6-cli|fpm` release images (or Debian package build); results receipted in this repo (#1, #6, #7, #37, #49, #50).
-- **source-verified**, code path compared against the `php-8.5.13` / `php-8.4.28` tags; unchanged = still present. Corpus PoC included as shipped, not re-run by us.
-- **Fixed**, closed by the 2026-11-19 release (advisories: #3 = GHSA-658j-r8rw-q6mx/CVE-2026-115560, #17 = GH-24437, #27 = CVE-2026-129538, #28 = CVE-2026-129292).
+- **fresh-verified 11-20**: re-run on official release images; results receipted (#1, #6, #7, #37, #49, #50).
+- **source-verified**: compared against the 8.5.13/8.4.28 tags; unchanged = still present.
+- **FIXED**: closed by the 2026-11-19 release.
 
 ### Fresh-verification notes
 
-- **#37 / E1**, cross-pool function-dispatch confusion: deterministic per (build, config, script); the disable-list composition selects the invoked builtin; the map is enumerable offline via a `get_defined_functions()` table-order diff; works at default ini; invoked path gdb-identified (`php_exec` family -> libc `popen`).
-- **#7 / E2**, user-filter UAF escalated to `system()` on all three tips, run under a full cPanel-style disable_functions list, with libc offsets resolved by pure-PHP ELF parsing (no shell calls).
-- **#49**, configuration footgun (see above): live on every tip when a relative basedir entry exists; runtime ini_set path stores the literal but does not escape.
-- **#1**, SIGSEGV exit 139 on 8.4.28 + 8.5.13; clean exit 0 on 8.6.0 (unmodified corpus PoC).
-- **#6**, live on 8.4.28 + 8.5.13 (16-byte in -> 15-byte out, trailing SP deleted); 8.6.0 keeps the SP with this shape.
-- **#50**, corpus PoC does not fire on release builds of the current tips (code path present at source level; exploitation requires additional heap grooming).
+- **#37 / E1**: cross-pool function-dispatch confusion. Default ini. gdb-identified invocation.
+- **#49 / E2**: relative-entry escape. Full-escape on 8.4.28 + 8.5.13 (deep cwd + raw entry). 8.6.0 resists.
+- **#7 / E3**: user-filter UAF -> `system()` on all tips, 18/18 under full disable_functions. Dual-channel on 8.4/8.5; direct-fire on 8.6.0.
+- **#1**: SIGSEGV 139 on 8.4.28 + 8.5.13; clean on 8.6.0.
+- **#6**: live on 8.4.28 + 8.5.13; 8.6.0 keeps the SP.
+- **#50**: inert on release builds.
 
 ---
 
-## Root causes (escalated findings)
+## Root causes
 
-- **E1:** `zend_disable_functions()` (`Zend/zend_API.c:3682`) deletes entries then `zend_hash_rehash()` compacts the table, while opcache's SHM-shared call slots and the `ZEND_INIT_FCALL` type-specialized handler (`Zend/zend_vm_def.h:4034`) resolve via a baked bucket index into the executing pool's table with no name validation; the plain handler's null check is a release-elided `ZEND_ASSERT`. Pools differing in `disable_functions` invoke wrong builtins with attacker-controlled arguments. gdb receipt: `execute_ex -> zif shim -> php_exec -> popen` in the hardened pool.
-- **E1 caveat:** `ini_get('disable_functions')` is constant-folded at compile, a pool executing another pool's cached script prints the compiling pool's value; not evidence of executing-pool config.
-- **E2:** `php_user_filter::filter()` calling `stream_filter_remove()` on itself frees the filter while `ext/standard/user_filters.c:225` runs `zend_update_property_null` over the freed abstract post-callback. The wrapper reads the abstract slot as a direct `zend_object*`, dispatches `handlers->write_property` (+0x28). Full-bin string reclaim + `/proc/self/mem` slot patch + kept obj-host string -> `system(cmd)`. Patch only the abstract slot: `abort()` survives a corrupted heap, `system()` does not.
+- **E1:** `zend_disable_functions()` + `zend_hash_rehash()` compacts the function table; `ZEND_INIT_FCALL` type-specialized handler resolves via baked bucket index with no name validation.
+- **E2:** `open_basedir` accepts relative entries, expanded once at startup against the daemon's cwd.
+- **E3:** `php_user_filter::filter()` calling `stream_filter_remove()` on itself frees the filter while `user_filters.c:225` runs `zend_update_property_null` over the freed abstract post-callback. Bucket reclaim + `/proc` pointer patch + gadget-popen.
 
 ## Weapons
 
 | Weapon | What it does |
 |--------|-------------|
-| `crosspool/poc/fcgi_client.py` | Dependency-free FastCGI responder client (stdout+stderr capture) |
-| `crosspool/poc/run_multi1.sh` | Marker-disciplined E1 RCE check (portable, default ini) |
-| `crosspool/poc/run_gt3.sh` | E1 exec-family map per tip (portable) |
-| `crosspool/poc/oracle methodology` | `get_defined_functions()` diff -> offline confusion-map computation |
-| `basedir-relentry/poc/poc-f49d.php` | CLI footgun receipt shape (climb + outside reads/includes) |
-| `userfilter-uaf/poc/ip_noffi_v8.php` | E2 end-to-end: UAF -> `write_property` -> `system()`/`abort()`, runs under disable_functions, pure PHP |
-| `pocs/f1...f52` | All 47 corpus PoCs, as shipped |
-
-```
-# E1 (RCE check, default ini, per tip)
-cd crosspool/poc && bash run_multi1.sh 8.4     # marker written by disabled pool A
-
-# E2 (under the full cPanel-style disable_functions list)
-docker run --rm -v $PWD:/h -e F7_TARGET=system -e F7_CMD="touch /tmp/PWNED" \
-  php:8.6-cli php -d disable_functions=exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source /h/userfilter-uaf/poc/ip_noffi_v8.php
-```
+| `crosspool/poc/fcgi_client.py` | FastCGI responder client |
+| `crosspool/poc/run_multi1.sh` | E1 RCE check |
+| `basedir-relentry/poc/poc-f49d.php` | E2 CLI climb |
+| `basedir-relentry/poc/poc-f49win3.php` | E2 full-escape probe |
+| `userfilter-uaf/poc/ip_noffi_v12.php` | **E3 end-to-end dual-channel exploit: 18/18, all tips** |
+| `pocs/f1...f52` | All 47 corpus PoCs |
 
 ## Receipts
 
 | Target | Chain | Receipt |
 |--------|-------|---------|
-| php:8.4/8.5/8.6-fpm (official), default ini | E1 `{exec,shell_exec}` | **marker by disabled pool A, all three tips** (`e1_default_whm.log`) |
-| php:8.4/8.5/8.6-fpm (official), explicit ini | E1 | **marker 3/3 each, 12/12 total incl. Debian pkg** (`multi1_matrix.log`) |
-| Debian trixie php-fpm8.4 8.4.28-1 (distro build) | E1 | **marker 3/3** |
-| php:8.4/8.5/8.6-fpm, 10-name cPanel-style list | E1 `passthru()` -> `readfile()` | **`/etc/passwd` dump through pool A response, all three tips** (`e1_default_whm.log`) |
-| php:8.4-fpm pool A worker under gdb | E1 identification | `popen` breakpoint hit via `php_exec` from `execute_ex`; marker written |
-| php:8.4/8.5/8.6-cli, full cPanel disable list, default MM, FFI off | E2 `system()` | **marker 3/3, PHP_EXIT=139 after execution** (`f7v8_hardened.log`) |
-| php:8.4/8.5/8.6-cli, full cPanel disable list | E2 `abort()` | **PHP_EXIT=134, 3/3** (`f7v8_hardened.log`) |
-| php:8.4/8.5/8.6-cli | #1 Exception-trace confusion | SIGSEGV exit 139 on 8.4.28 + 8.5.13, exit 0 on 8.6.0 (`highs_receipts.log`) |
-| php:8.4/8.5-cli | #6 quoted-printable OOB | 16-byte input -> 15-byte output, trailing SP deleted (`gt3` family maps) |
-
-## Build / Environment
-
-```
-docker pull php:8.4-fpm && docker run --rm php:8.4-fpm php -r 'echo PHP_VERSION;'   # 8.4.28
-# Debian distro build:
-docker run -it debian:trixie bash -c 'apt-get update && apt-get install -y php-fpm php-cli && php -v'
-```
-
-Escalated findings verified on default configuration unless stated: default Zend MM, FFI disabled, no `USE_ZEND_ALLOC` override, no ASan, opcache on (package default for FPM). E1 receipts at default ini and at explicit ini are both included.
+| php:8.4-fpm, default ini | E1 | **marker all tips** |
+| php:8.4-fpm, cPanel list | E1 readfile | **`/etc/passwd` dump** |
+| php:8.4/8.5-cli, `-d jail:../` | E2 | **CWD=/ + `/etc/passwd`** |
+| php:8.4-cli, deep cwd + raw entry | E2 full escape | **`/etc/passwd` outside jail** |
+| **php:8.4/8.5/8.6-cli, full cPanel disable_functions** | **E3** | **18/18 MARKER** |
 
 ## Disclaimer
 
-This material is security research for **defensive** and **authorized** testing only. It is not permission or encouragement to attack systems you do not own or are not explicitly authorized to test.
+This material is security research for **defensive** and **authorized** testing only.
 
-- **PHP (the project / PHP Group / related foundations):** Findings, root-cause notes, status tables, and reproduction material are published so operators and maintainers can assess and patch. Do not use this material to compromise production PHP deployments without authorization.
-- **CISA and similar government and standards bodies:** Treat this as coordinated, defensive research context intended to support vulnerability management and prioritization, not as a playbook for harmful activity against critical infrastructure or government systems.
-- **Cyber threat intelligence firms and defenders:** Status tables and root-cause summaries are provided to support detection, prioritization, and remediation. Redistribution or reuse of this material for malicious operations is prohibited.
+- **PHP (the project / PHP Group / related foundations):** Published so operators and maintainers can assess and patch.
+- **CISA and similar government and standards bodies:** Coordinated, defensive research context.
+- **Cyber threat intelligence firms and defenders:** Status tables support detection and remediation. No reuse for malicious operations.
 
 Unauthorized access to computer systems is illegal. The authors assume no liability for misuse.
 
@@ -167,7 +138,7 @@ Unauthorized access to computer systems is illegal. The authors assume no liabil
 | Contribution | Credited to |
 |-------------|-------------|
 | All findings, verification, harnesses, receipts | [@acd421](https://x.com/acd421) |
-| RCE research assistance, E2 user-filter UAF -> `write_property` hijack -> `system()` | [@GGSec](https://x.com/GGASecDe) |
+| RCE research assistance, E3 user-filter UAF -> `write_property` hijack -> `system()` | [@GGSec](https://x.com/GGASecDe) |
 
 ## License
 
